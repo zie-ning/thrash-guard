@@ -12,6 +12,12 @@
             경계 판단에 쓸 수 있도록 SSH 최장 무응답 시간 등을 함께 기록한다
   running   (실행 중에만) 아직 위 둘 중 어느 쪽도 확정되지 않았다
 
+정상 조기 종료(D16): run.json이 있고, anon이 목표 크기까지 다 자란 뒤 5분 동안 아래를 모두
+만족하면 끝까지 기다리지 않고 normal로 확정한다. 결과에 early_normal=true로 표시한다.
+  - 그 5분 동안 SSH 프로브가 한 번도 실패하지 않았다
+  - 그 5분 동안 MemAvailable이 20 MiB(livelock 기준)를 넘는 상태를 유지했다
+이 규칙은 5분 뒤에 늦게 시작되는 스래싱을 놓칠 수 있다(미확인). 임계값은 임시값이다.
+
 입력(결과 디렉터리 안):
   samples.log    tg_receiver.py 원본 로그 (<recv_unix_ns>\\t<tg1 key=value ...>)
   ssh_probe.tsv  ssh_probe.py 출력
@@ -25,6 +31,10 @@ import sys
 
 LIVELOCK_GAP_S = 600           # SSH 무응답 기준: 성공이 한 번도 없는 구간의 최소 길이
 MEM_AVAIL_LIMIT_KB = 20 * 1024  # MemAvailable 기준: 20 MiB
+STABLE_S = 300                  # 정상 조기 종료: 안정 구간 길이
+STABLE_MEM_KB = MEM_AVAIL_LIMIT_KB  # 정상 조기 종료: 구간 안 MemAvailable은 이 값을 넘어야 한다 (livelock 구역과 겹치지 않게)
+STABLE_MIN_PROBES = 200         # 구간 안 프로브가 이보다 적으면 안정으로 보지 않는다
+STABLE_MIN_SAMPLES = 600        # 250 ms 주기에서 300초면 1200개. 절반 미만이면 수집이 끊긴 것
 NS = 1_000_000_000
 
 _KV = re.compile(r"(\w+)=(\S+)")
@@ -88,6 +98,36 @@ def longest_gap(probes, end_ns):
     return best
 
 
+def load_run(d):
+    path = os.path.join(d, "run.json")
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def early_normal(run, probes, samples, now_ns):
+    """anon이 다 자란 뒤 STABLE_S 동안 안정적이었는가."""
+    if run is None:
+        return False
+    load = run.get("load", {})
+    rate = load.get("rate_mib_s") or 0
+    grow_s = load.get("anon_mib", 0) / rate if rate > 0 else 0
+    start_ns = run.get("load_start_unix_ns")
+    if start_ns is None:
+        return False
+    win_start = now_ns - STABLE_S * NS
+    if win_start < start_ns + int(grow_s * NS):
+        return False  # 아직 다 자라지 않았거나 안정 구간이 모자란다
+    win_probes = [ok for t, ok in probes if t >= win_start]
+    win_mem = [m for t, m, _ in samples if t >= win_start]
+    return (len(win_probes) >= STABLE_MIN_PROBES and all(win_probes) and
+            len(win_mem) >= STABLE_MIN_SAMPLES and min(win_mem) > STABLE_MEM_KB)
+
+
 def evaluate(d, now_ns=None, final=False):
     probes = load_probes(os.path.join(d, "ssh_probe.tsv"))
     samples = load_samples(os.path.join(d, "samples.log"))
@@ -109,10 +149,13 @@ def evaluate(d, now_ns=None, final=False):
     livelock = (oom_delta == 0 and gap_s >= LIVELOCK_GAP_S and
                 mem_min_gap is not None and mem_min_gap <= MEM_AVAIL_LIMIT_KB)
 
+    early = False
     if oom_delta > 0:
         verdict = "oom_kill"
     elif livelock:
         verdict = "livelock"
+    elif early_normal(load_run(d), probes, samples, now_ns):
+        verdict, early = "normal", True
     else:
         verdict = "normal" if final else "running"
 
@@ -121,6 +164,7 @@ def evaluate(d, now_ns=None, final=False):
 
     return {
         "verdict": verdict,
+        "early_normal": early,
         "ssh_max_gap_s": round(gap_s, 1),
         "ssh_probes": len(probes),
         "ssh_ok": sum(1 for _, ok in probes if ok),

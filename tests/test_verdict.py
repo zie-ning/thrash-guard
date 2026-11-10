@@ -33,6 +33,13 @@ def ok_probes(until, step=1):
     return [(s, 200, True) for s in range(0, until, step)]
 
 
+def write_run(d, anon_mib=100, rate=10, start_s=0):
+    import json
+    with open(os.path.join(d, "run.json"), "w") as f:
+        json.dump({"load": {"anon_mib": anon_mib, "rate_mib_s": rate},
+                   "load_start_unix_ns": T0 + start_s * NS}, f)
+
+
 class VerdictTest(unittest.TestCase):
     def run_case(self, probes, samples, now_s=None, final=False):
         with tempfile.TemporaryDirectory() as d:
@@ -80,6 +87,41 @@ class VerdictTest(unittest.TestCase):
         res = self.run_case(probes, samples, now_s=750, final=True)
         self.assertEqual(res["verdict"], "normal")
         self.assertGreaterEqual(res["ssh_max_gap_s"], 600)
+
+    def early_case(self, probes, samples, now_s, **run):
+        with tempfile.TemporaryDirectory() as d:
+            write_probes(d, probes)
+            write_samples(d, samples)
+            write_run(d, **run)
+            return verdict.evaluate(d, T0 + now_s * NS)
+
+    def test_early_normal_after_stable_window(self):
+        # 부하 시작 0초, 10초에 다 자람. 10초 + 300초 이후 안정이면 조기 종료.
+        res = self.early_case(ok_probes(320), [(s + 0.25 * k, 300_000, 0) for s in range(320) for k in range(4)],
+                              320)
+        self.assertEqual(res["verdict"], "normal")
+        self.assertTrue(res["early_normal"])
+
+    def test_no_early_normal_before_window_is_full(self):
+        res = self.early_case(ok_probes(250), [(s + 0.25 * k, 300_000, 0) for s in range(250) for k in range(4)],
+                              250)
+        self.assertEqual(res["verdict"], "running")
+
+    def test_no_early_normal_with_low_memory(self):
+        mem = lambda s: 15_000 if s == 200 else 300_000  # noqa: E731
+        res = self.early_case(ok_probes(320), [(s + 0.25 * k, mem(s), 0) for s in range(320) for k in range(4)],
+                              320)
+        self.assertEqual(res["verdict"], "running")
+
+    def test_no_early_normal_with_ssh_failure(self):
+        probes = [(s, 200, s != 250) for s in range(320)]
+        res = self.early_case(probes, [(s + 0.25 * k, 300_000, 0) for s in range(320) for k in range(4)], 320)
+        self.assertEqual(res["verdict"], "running")
+
+    def test_no_early_normal_without_run_json(self):
+        res = self.run_case(ok_probes(320), [(s + 0.25 * k, 300_000, 0) for s in range(320) for k in range(4)],
+                            now_s=320)
+        self.assertEqual(res["verdict"], "running")
 
     def test_oom_kill_wins(self):
         probes = ok_probes(100) + [(s, 5000, False) for s in range(100, 750)]
