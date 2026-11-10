@@ -1,0 +1,24 @@
+{
+  "id": "a650f600r4",
+  "scenario": "S1",
+  "load": {
+    "anon_mib": 650,
+    "rate_mib_s": 4,
+    "file_mib": 600,
+    "pattern": "random"
+  },
+  "max_sec": 1200,
+  "baseline_sec": 15,
+  "load_start_unix_ns": 1794301819216510328,
+  "result": {
+    "verdict": "normal",
+    "early_normal": false,
+    "ssh_max_gap_s": 3.2,
+    "ssh_probes": 1294,
+    "ssh_ok": 1294,
+    "mem_avail_min_mib": 13.3,
+    "mem_avail_min_mib_in_gap": 420.8,
+    "oom_kill_delta": 0,
+    "samples": 5030
+  }
+}

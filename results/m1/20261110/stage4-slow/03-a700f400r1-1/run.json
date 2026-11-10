@@ -1,0 +1,13 @@
+{
+  "id": "a700f400r1",
+  "scenario": "S1",
+  "load": {
+    "anon_mib": 700,
+    "rate_mib_s": 1,
+    "file_mib": 400,
+    "pattern": "random"
+  },
+  "max_sec": 1800,
+  "baseline_sec": 15,
+  "load_start_unix_ns": 1794308978081288439
+}

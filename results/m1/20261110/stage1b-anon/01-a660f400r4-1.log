@@ -1,0 +1,12 @@
+[17:00:24] 결과 디렉터리: /mnt/c/thrash-guard/results/m1/20261110/stage1b-anon/01-a660f400r4-1
+[17:00:24] VM 시작
+[17:00:34] VM 시작: run.qcow2, 메모리 1024 MiB, vCPU 2, I/O 상한 3000 IOPS / 131072000 B/s
+[17:00:34] SSH 대기
+[17:00:51] 준비 완료: ssh -i /home/field/.ssh/tg_vm_ed25519 -p 2222 tg@127.0.0.1
+[17:00:54] file 모드 파일 준비 (400 MiB)
+tg-load: 파일 준비 완료 (400 MiB, /var/tmp/tg.dat)
+[17:00:57] 기준 구간 15초
+[17:01:12] 부하 시작: anon 660 MiB (4 MiB/s), file 400 MiB, 최대 1200초
+5023행 -> /mnt/c/thrash-guard/results/m1/20261110/stage1b-anon/01-a660f400r4-1/samples.csv
+판정: normal  (SSH 최장 무응답 2.6초, MemAvailable 최소 9.4 MiB, OOM kill 0건, 샘플 5021개)
+[17:21:54] 완료: /mnt/c/thrash-guard/results/m1/20261110/stage1b-anon/01-a660f400r4-1

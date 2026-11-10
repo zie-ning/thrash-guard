@@ -1,0 +1,23 @@
+{
+  "id": "a500f400r4",
+  "scenario": "S1",
+  "load": {
+    "anon_mib": 500,
+    "rate_mib_s": 4,
+    "file_mib": 400,
+    "pattern": "random"
+  },
+  "max_sec": 1200,
+  "baseline_sec": 15,
+  "load_start_unix_ns": 1794291389097146054,
+  "result": {
+    "verdict": "normal",
+    "ssh_max_gap_s": 2.8,
+    "ssh_probes": 1278,
+    "ssh_ok": 1278,
+    "mem_avail_min_mib": 129.2,
+    "mem_avail_min_mib_in_gap": 180.1,
+    "oom_kill_delta": 0,
+    "samples": 5015
+  }
+}

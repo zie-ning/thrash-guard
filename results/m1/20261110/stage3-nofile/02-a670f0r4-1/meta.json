@@ -1,0 +1,26 @@
+{
+  "recorded_at": "2026-11-10T09:59:41.271096+00:00",
+  "git": {
+    "sha": "c4799cda66a91f1a3ab63e04dacc49d1c34d3c09",
+    "dirty": true
+  },
+  "vm": {
+    "mem_mb": 1024,
+    "cpus": 2,
+    "io_limit": {
+      "iops": 3000,
+      "bytes_per_sec": 131072000
+    },
+    "hypervisor": "qemu-whpx"
+  },
+  "guest": {
+    "kernel": "6.8.0-138-generic",
+    "lru_gen_enabled": "0x0007",
+    "lru_gen_min_ttl_ms": "0",
+    "swappiness": "60",
+    "watermark_scale_factor": "10",
+    "swap_total_kb": "0",
+    "mem_total_kb": "984616",
+    "oomd": "inactive"
+  }
+}
