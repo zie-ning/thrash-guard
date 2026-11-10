@@ -133,6 +133,37 @@ static void test_cg_memstat_fixture(void)
     TG_CHECK_EQ_U64(ms.file, 991731712);
 }
 
+/* 길벗과 같은 6.8 계열 커널(실험용 VM)에서 캡처한 파일도 모든 필드를 읽는다. */
+static void test_vm68_fixtures(void)
+{
+    struct tg_psi psi;
+    struct tg_vmstat vm;
+    struct tg_meminfo mi;
+    struct tg_cg_memstat ms;
+    uint64_t found = 0;
+    size_t len;
+
+    len = load(FX("vm-6.8", "pressure_memory"));
+    TG_CHECK(tg_psi_parse(buf, len, &psi) == 0 && psi.has_full);
+
+    len = load(FX("vm-6.8", "cgroup_memory.pressure"));
+    TG_CHECK(tg_psi_parse(buf, len, &psi) == 0 && psi.has_full);
+
+    len = load(FX("vm-6.8", "vmstat"));
+    TG_CHECK(tg_vmstat_parse(buf, len, &vm, &found) == 0);
+    TG_CHECK_EQ_U64(found, tg_mask_all(tg_vmstat_nfields));
+    TG_CHECK_EQ_U64(vm.pgmajfault, 2388);
+
+    len = load(FX("vm-6.8", "meminfo"));
+    TG_CHECK(tg_meminfo_parse(buf, len, &mi, &found) == 0);
+    TG_CHECK_EQ_U64(found, tg_mask_all(tg_meminfo_nfields));
+    TG_CHECK_EQ_U64(mi.mem_total_kb, 984620);
+
+    len = load(FX("vm-6.8", "cgroup_memory.stat"));
+    TG_CHECK(tg_cg_memstat_parse(buf, len, &ms, &found) == 0);
+    TG_CHECK_EQ_U64(found, tg_mask_all(tg_cg_memstat_nfields));
+}
+
 static void test_kv_edge_cases(void)
 {
     struct tg_vmstat vm;
@@ -207,6 +238,7 @@ int main(void)
     TG_RUN(test_vmstat_fixture);
     TG_RUN(test_meminfo_fixture);
     TG_RUN(test_cg_memstat_fixture);
+    TG_RUN(test_vm68_fixtures);
     TG_RUN(test_kv_edge_cases);
     TG_RUN(test_read_truncation);
     TG_RUN(test_read_proc_live);
