@@ -1,36 +1,49 @@
-# 빌드, 정적 분석, 단위 테스트 (M0-5)
+# 빌드, 정적 분석, 단위 테스트
 # 스래싱 실험은 CI에서 하지 않는다. VM과 EC2에서만 수행한다.
 name: ci
 
+# 코드가 바뀐 PR과 main 푸시에서만 한 번씩 돈다. 문서·측정 결과만 바뀌면 생략한다.
 on:
   push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - "results/**"
   pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - "results/**"
+
+# 같은 PR(브랜치)에 새 커밋이 오면 이전 실행을 취소한다.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-test:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
         cc: [gcc, clang]
     steps:
       - uses: actions/checkout@v4
-
-      - name: 도구 설치
-        run: sudo apt-get update && sudo apt-get install -y clang
-
+      # gcc와 clang은 러너 이미지에 기본 설치되어 있어 설치 단계가 없다.
       - name: 정적 링크 빌드 (glibc)
         run: make CC=${{ matrix.cc }}
-
       - name: 단위 테스트 (ASan/UBSan)
         run: make test TEST_CC=${{ matrix.cc }}
 
   musl:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: musl 설치
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends musl-tools
       - name: 정적 링크 빌드 (musl)
         run: make LIBC=musl
       - name: 바이너리 크기 기록
@@ -38,9 +51,10 @@ jobs:
 
   lint:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: cppcheck 설치
-        run: sudo apt-get update && sudo apt-get install -y cppcheck
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends cppcheck
       - name: 정적 분석
         run: make lint
