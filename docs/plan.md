@@ -73,10 +73,13 @@ Thrash Guard는 리눅스 PSI(Pressure Stall Information)로 메모리 스래싱
 - **H3. 현행 구성의 취약성**: swap과 `mem_limit`이 있어도 컨테이너 내부 스래싱은 깔끔한 kill 없이
   오래 지속될 수 있다.
 - **H4. 기존 수단의 유효성**: systemd-oomd와 MGLRU `min_ttl_ms`는 livelock을 끊지만, 복구 시간이나
-  오탐에서 한계가 있다.
+  오탐에서 한계가 있다. 특히 `min_ttl_ms`는 전역 회수 경로에서만 동작해, 컨테이너가 자기 메모리 상한에
+  걸린 내부 스래싱(S2)은 막지 못할 수 있다.
 - **H5. 차별화 효과**: 이벤트 기반 감지, 복합 판단, 자기 보호는 복구 시간과 오탐을 개선한다.
 
 H4와 H5는 반증될 수 있다. systemd-oomd가 더 낫거나 차이가 없다면 그 결과를 그대로 기록한다.
+기준선 측정(M2) 직후 기존 수단이 무엇을 막고 무엇을 놓치는지 보고, 데몬이 집중할 빈틈을 다시 정한다.
+데몬 로직은 커널 안전망(`min_ttl_ms`) 없이도 동작하도록 만들고, 함께 쓸 때의 효과는 C6로 잰다.
 
 ## 4. 데몬 설계
 
@@ -170,10 +173,12 @@ PSI 트리거의 초깃값은 `full 150000 1000000`(1초 중 150 ms)으로 시�
 |---|---|
 | C0 | 방어 없음 |
 | C1 | swap 2 GiB + `swappiness=10` + `mem_limit` (길벗 현행) |
-| C2 | C1 + systemd-oomd |
+| C2 | C1 + systemd-oomd (기본 설정) |
+| C2t | C1 + systemd-oomd (지속 시간·임계를 데몬과 비슷하게 튜닝) |
 | C3 | C1 + MGLRU `min_ttl_ms=1000` |
 | C4 | C1 + Thrash Guard MVP (감지 + kill) |
 | C5 | C1 + Thrash Guard 전체 기능 |
+| C6 | C4 + MGLRU `min_ttl_ms=1000` (커널 안전망과 함께 쓸 때의 효과) |
 
 여력이 있으면 C1에서 `swappiness` 10/60/100, zswap, `watermark_scale_factor`를 변수로 추가한다.
 
