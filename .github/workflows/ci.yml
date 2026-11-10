@@ -1,0 +1,46 @@
+# 빌드, 정적 분석, 단위 테스트 (M0-5)
+# 스래싱 실험은 CI에서 하지 않는다. VM과 EC2에서만 수행한다.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 도구 설치
+        run: sudo apt-get update && sudo apt-get install -y clang
+
+      - name: 정적 링크 빌드 (glibc)
+        run: make CC=${{ matrix.cc }}
+
+      - name: 단위 테스트 (ASan/UBSan)
+        run: make test TEST_CC=${{ matrix.cc }}
+
+  musl:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: musl 설치
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: 정적 링크 빌드 (musl)
+        run: make LIBC=musl
+      - name: 바이너리 크기 기록
+        run: ls -l build/musl/tg-sampler
+
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: cppcheck 설치
+        run: sudo apt-get update && sudo apt-get install -y cppcheck
+      - name: 정적 분석
+        run: make lint
