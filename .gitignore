@@ -1,0 +1,15 @@
+# 빌드 산출물
+/build/
+
+# VM 디스크 이미지 (용량이 커서 커밋하지 않는다)
+*.qcow2
+*.img
+/lab/vm/images/
+
+# Python
+__pycache__/
+*.pyc
+
+# 편집기
+.vscode/
+*.swp

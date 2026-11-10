@@ -1,0 +1,232 @@
+# Thrash Guard 로드맵
+
+> 작성: 2026-11-10. [plan.md](plan.md)를 실행 가능한 작업 단위로 나눈 문서다.
+> plan.md는 "무엇을, 왜"를, 이 문서는 "어떤 순서로, 무엇이 끝나면 완료인지"를 다룬다.
+> 수치는 모두 측정 전 임시값이며, 확정 시점을 함께 적는다.
+
+## 0. 계획 대비 보완점
+
+계획을 작업으로 쪼개면서 발견한 빈틈과 그 대응이다.
+
+| # | 빈틈 | 대응 |
+|---|---|---|
+| 1 | 스래싱 중에는 **수집기도 멈춘다**. 길벗에서 PSI를 못 남긴 이유와 같다. 수집기가 멈추면 H2를 판정할 수 없다. | 수집기 `tg-sampler`를 C로 먼저 만들고 데몬과 같은 자기 보호(mlockall, 정적 링크, 사전 할당)를 적용한다. 파서와 자기 보호 모듈은 데몬이 그대로 재사용한다. 자기 보호의 효과도 M0~M1에서 미리 검증된다. |
+| 2 | Docker 컨테이너는 기본적으로 `system.slice` 아래에 생긴다. plan 4.3의 "`system.slice` 제외" 규칙과 충돌한다. | 실험용 컨테이너는 전용 `workload.slice` 아래에 둔다(`cgroup_parent`). 데몬과 systemd-oomd 모두 이 slice만 대상으로 삼는다. |
+| 3 | 로컬 SSD는 EBS보다 훨씬 빠르다. VM에서는 재적재 비용이 작아 스래싱이 약하게 나타날 수 있다. | VM 디스크에 IOPS·대역폭 상한을 건다(gp3 기본값 3000 IOPS / 125 MiB/s에서 시작). 상한값은 실행 메타데이터에 기록한다. |
+| 4 | 우리 데몬만 튜닝하고 systemd-oomd는 기본값(압력 지속 30초)으로 두면 비교가 불공정하다. | 기본값 구성 C2와, 지속 시간·임계를 맞춘 튜닝 구성 C2t를 함께 측정한다. |
+| 5 | 6.8 계열 커널은 배포판 설정에 따라 MGLRU가 기본으로 켜져 있을 수 있다. 그렇다면 C0 자체가 "MGLRU on, `min_ttl_ms=0`"이다. | 모든 실행에서 `/sys/kernel/mm/lru_gen/enabled`와 `min_ttl_ms`를 기록한다. 길벗과 같은 AWS 커널의 기본값은 M6 전에 t3.micro에서 따로 확인한다. |
+| 6 | "스래싱 시작"과 "복구"의 정의가 측정 가능한 형태가 아니다. | 2절에서 시점을 정의한다. |
+| 7 | `mlockall(MCL_CURRENT)`은 매핑된 영역을 전부 고정한다. 기본 스레드 스택(8 MiB)과 glibc 스레드별 arena가 그대로 고정되면 2 MiB 목표를 넘는다. | 스레드 스택 크기를 명시하고(예: 64 KiB) `M_ARENA_MAX=1`로 둔다. 고정 메모리(`VmLck`)를 CI가 아닌 실기 측정 항목에 넣는다. |
+| 8 | 판단 임계값을 실험 장비에서만 맞추면 반복이 느리다. | 판단 로직을 순수 함수로 분리한다. 그러면 M2에서 수집한 시계열을 오프라인으로 재생해 임계값을 평가할 수 있다(리플레이 테스트). |
+
+### 개발 환경 확인 결과 (2026-11-10)
+
+| 항목 | 상태 |
+|---|---|
+| WSL | Ubuntu 24.04.3, 커널 `6.18.33.2-microsoft-standard-WSL2`, 메모리 6 GiB, 4코어 |
+| 툴체인 | gcc 13.3, make, python 3.12. clang·cppcheck 없음 |
+| PSI / cgroup v2 | `/proc/pressure/memory` 동작, memory 컨트롤러 사용 가능 |
+| MGLRU | 없음(`/sys/kernel/mm/lru_gen` 부재) |
+| 가상화 | WSL 안 `/dev/kvm` 없음(중첩 가상화 설정 후에도 동일). Windows용 QEMU 11.1.0 설치, WHPX 가속 기동 확인 |
+| 네트워크 | WSL `networkingMode=mirrored`. WSL에서 `127.0.0.1`로 Windows QEMU의 QMP 포트 접속 확인 |
+| 기타 | Terraform, AWS CLI 미설치. git remote 없음, 커밋 없음 |
+
+## 1. 결정 사항
+
+> 항목은 사용자 의견을 받은 뒤 "확정"으로 바꾼다.
+
+| ID | 항목 | 결정 | 상태 |
+|---|---|---|---|
+| D1 | 통합 VM 플랫폼 | C. Windows용 QEMU + WHPX 가속. WSL 스크립트가 QMP·SSH로 제어한다. 아래 비교와 경과 참고 | 확정 (2026-11-10) |
+| D2 | 정적 링크 libc | `Makefile` 변수 하나로 glibc 정적·musl 정적을 모두 빌드할 수 있게 한다. M3에서 두 빌드의 바이너리 크기, 유휴 `VmRSS`·`VmLck`를 실측해 기본값을 고른다. glibc 정적 링크에서 문제 되는 기능(NSS 등)은 쓰지 않는다 | 확정 (2026-11-10) |
+| D3 | 빌드 | 단일 `Makefile`. 외부 빌드 도구 의존 없음 | 확정 (2026-11-10) |
+| D4 | 단위 테스트 | 자체 최소 assert 헤더 + `/proc` 파일 fixture. 외부 프레임워크 없음 | 확정 (2026-11-10) |
+| D5 | 수집 데이터 전송 | VM → 외부 수신기로 UDP 텍스트 한 줄씩, 일련번호 포함. 디스크 쓰기를 핵심 경로에서 배제하고, 강제 리셋 때 기록 유실을 막기 위함. 수신기가 도착 시각을 붙여 CSV로 저장한다. M1에서 누락이 크면 QEMU 가상 시리얼 포트를 보조 경로로 추가한다 | 확정 (2026-11-10) |
+| D6 | 분석 | Python 표준 라이브러리 + matplotlib. 원본은 CSV, 메타데이터는 JSON | 확정 (2026-11-10) |
+| D7 | 언어 표준 | C11 + `_GNU_SOURCE`, `-Wall -Wextra -Wpedantic -Wshadow -Werror` | 확정 (2026-11-10) |
+| D8 | 라이선스 | 공개(M6) 전에 정한다 | 보류 |
+
+### D1. VM 플랫폼 비교
+
+| | A. WSL 중첩 가상화 + QEMU/KVM | B. Multipass (Hyper-V) | C. Windows QEMU + WHPX |
+|---|---|---|---|
+| 준비 | `.wslconfig`에 `nestedVirtualization=true` 후 `wsl --shutdown`. CPU 지원 여부 확인 필요 | Multipass 설치 | QEMU for Windows 설치, Windows 하이퍼바이저 플랫폼 기능 활성화 |
+| 디스크 I/O 상한 | QEMU `throttle-group`으로 스크립트에서 바로 설정 | 관리자 PowerShell `Set-VMHardDiskDrive -MaximumIOPS` | A와 같음(`throttle-group`) |
+| 멈춘 VM 강제 리셋 | QMP `system_reset`, 스크립트로 자동화 쉬움 | `multipass restart`가 멈춘 VM에서 실패할 수 있어 Hyper-V 명령 필요 | A와 같음(QMP를 TCP로 열어 WSL에서 호출) |
+| 스냅샷 | qcow2 백킹 파일로 매 실행마다 깨끗한 디스크 | Multipass 스냅샷(VM 정지 필요) | A와 같음 |
+| 측정자 위치 | WSL(VM 밖)에서 bash로 전부 처리 | WSL↔Hyper-V 기본 스위치 간 네트워크 도달성이 환경마다 다름 | WSL. VM 포트는 Windows localhost로 전달되며 WSL에서 Windows 호스트로 접속한다 |
+| 단점 | Docker Desktop도 WSL 재시작 영향을 받음. 중첩 가상화 성능 손실 | 자동화 경로가 Windows와 WSL로 나뉨 | WHPX 가속은 KVM보다 덜 쓰이는 경로라 안정성 확인 필요. 프로세스 관리가 Windows 쪽 |
+
+**경과**: 처음에는 A를 골랐다. 그러나 `.wslconfig`에 `nestedVirtualization=true`를 넣고 재시작해도 WSL 커널에 `svm` 플래그와 `/dev/kvm`이 나타나지 않았다(Ryzen 5 7530U, Windows 11 26200, WSL 2.7.1). WSL은 "지원 안 함" 경고를 띄우지 않았고, Hyper-V Compute 로그에는 VM 생성 설정이 남지 않아 원인을 특정하지 못했다. Windows 보안 설정을 근거 없이 바꾸는 대신 C로 결정했다. C는 A의 자동화 장점(I/O 상한, QMP 리셋, qcow2 복원)을 유지한다. C도 막히면 B로 간다. 어느 쪽이든 VM 밖 측정자 = WSL이다.
+
+## 2. 측정 정의 (임시, M1에서 확정)
+
+| 용어 | 정의 |
+|---|---|
+| T0 (스래싱 시작) | `tg-sampler` 기준, 시스템 PSI `full` 1초 구간 비율이 10% 이상인 상태가 처음 3초 연속된 시점 |
+| T_detect | C4/C5: 데몬이 "스래싱 지속"으로 판단한 시각. C2: systemd-oomd의 kill 로그 시각 |
+| T_kill | 대상 cgroup이 종료된 시각(`cgroup.kill` 쓰기 또는 oomd 로그) |
+| T_recover | 외부 SSH 프로브가 **10회 연속** 1초 안에 성공한 구간의 첫 시점 |
+| 복구 시간 | T_recover − T0 |
+| 미복구 | T0 + 30분까지 T_recover가 없음. 이후 강제 리셋 |
+| 외부 SSH 프로브 | VM 밖에서 1초마다 **새 연결**로 `ssh vm true`, 타임아웃 5초. 연결 재사용(ControlMaster)은 sshd의 fork·로그인 경로를 건너뛰므로 쓰지 않는다 |
+| 카나리 프로브 | VM 안 카나리 서버(TCP)에 VM 밖에서 1초마다 요청, 성공률과 지연 기록 |
+
+시각은 모두 VM 밖 수신기의 시계로 맞춘다. 샘플러는 자체 단조 시계도 함께 보내 전송 지연을 확인한다.
+
+## 3. 저장소 구조 (plan 7절 구체화)
+
+```text
+thrash-guard/
+├── src/
+│   ├── common/        # procfs 파서, 자기 보호, 링버퍼 로그 (sampler·데몬 공용)
+│   ├── sampler/       # tg-sampler
+│   └── daemon/        # thrash-guard
+├── tests/             # 단위 테스트, fixtures/(/proc 원본 캡처)
+├── workload/          # tg-load (anon / file / canary 모드)
+├── packaging/         # thrash-guard.service, 예시 설정
+├── lab/
+│   ├── vm/            # VM 생성·복원·리셋
+│   ├── collect/       # UDP 수신기, SSH·카나리 프로브
+│   ├── profiles/      # C0~C5 구성 적용 스크립트
+│   ├── run.sh         # 1회 실행 하네스
+│   └── analyze/       # 지표 계산, 그래프
+├── infra/             # t3.micro Terraform (M6)
+├── results/           # <날짜>/<run-id>/ 원본 데이터
+└── docs/              # plan, roadmap, decisions/, reports/
+```
+
+## 4. 마일스톤 상세
+
+각 마일스톤 끝에 `m0`, `m1` … 태그를 단다. 작업 ID(예: M0-2)는 커밋 메시지에 적어 추적한다.
+
+### M0. 기반: 저장소, 공용 모듈, 수집 경로
+
+> **핵심**: 실험 전에 "블랙박스"와 "실험실"을 갖춘다. 컴퓨터가 멈춰 가는 동안에도 메모리 상태를 기록해 VM 밖으로 보내는 수집기를 만들고, 길벗 서버와 비슷한 1 GiB 실험용 VM을 준비한다. 여기서 만드는 메모리 상태 읽기·자기 보호 코드는 데몬이 그대로 재사용한다.
+
+| ID | 작업 | 산출물 |
+|---|---|---|
+| M0-1 | 저장소 골격: `.gitattributes`(LF 강제), `.editorconfig`, `.gitignore`, `Makefile`, README 초안 | 빈 빌드 통과 |
+| M0-2 | procfs 파서: `pressure`(some/full의 avg·total), `vmstat` 필요 필드, `meminfo`, cgroup `memory.stat`·`memory.pressure`. 호출자 버퍼만 쓰고 할당하지 않는다 | `src/common/procfs.[ch]`, fixture 기반 단위 테스트 |
+| M0-3 | 자기 보호 모듈: `mlockall`, 스택 사전 접근, 스레드 스택 크기 고정, `M_ARENA_MAX=1`, `oom_score_adj` | `src/common/selfprot.[ch]` |
+| M0-4 | `tg-sampler`: 250 ms 주기로 PSI·vmstat·meminfo를 읽어 UDP로 전송. 소켓·버퍼는 초기화 때 준비 | 정적 바이너리 |
+| M0-5 | CI(GitHub Actions): gcc·clang `-Werror` 빌드, cppcheck, ASan/UBSan 단위 테스트 | `.github/workflows/ci.yml` |
+| M0-6 | VM 구축(D1): Ubuntu 22.04 클라우드 이미지 → HWE 6.8 커널, 메모리 1 GiB, 2 vCPU, 디스크 I/O 상한, Docker, `workload.slice`, 기준 스냅샷 | `lab/vm/` |
+| M0-7 | 수신기·프로브: UDP → CSV, SSH 프로브, 실행 메타데이터 수집(커널, config, `lru_gen`, swappiness, I/O 상한, git SHA) | `lab/collect/` |
+
+**완료 조건**: VM에서 `stress-ng --vm`으로 압력을 줬을 때, WSL 수신기의 CSV에 PSI 상승과 SSH 프로브 지연이 같은 시간축으로 기록된다.
+
+**진행 (2026-11-10)**
+
+| ID | 상태 | 비고 |
+|---|---|---|
+| M0-1 | 완료 | |
+| M0-2 | 완료 | WSL 6.18 fixture로 단위 테스트 통과. 6.8 VM fixture는 M0-6에서 추가 |
+| M0-3 | 완료 | 스레드 스택 크기 고정은 스레드를 쓰는 데몬(M3)에서 적용 |
+| M0-4 | 완료 | WSL에서 100 ms 주기 30샘플 전송, 누락 0. 일반 사용자 권한에서 `VmLck` 약 1 MB(glibc 정적) |
+| M0-5 | 작성 | 원격 저장소가 없어 아직 실행하지 않음. 로컬에 clang·cppcheck가 없어 해당 단계는 미검증 |
+| M0-6 | 대기 | |
+| M0-7 | 일부 | UDP 수신기(`lab/collect/tg_receiver.py`)만 구현. SSH 프로브, 메타데이터, CSV 변환 남음 |
+
+### M1. 재현
+
+> **핵심**: 길벗 장애를 실험실에서 다시 일으킨다. "메모리는 바닥인데 OOM kill은 없고, SSH는 10분 넘게 응답하지 않는" 상태를 반복해서 만들 수 있는 조건을 찾는다. 그리고 그때 수집한 데이터로 "원인은 스래싱"이라는 추측이 맞는지 판정한다(H1, H2).
+
+| ID | 작업 |
+|---|---|
+| M1-1 | `tg-load`: anon 모드(증가 속도, 목표 크기, 순차·무작위 접근), file 모드(mmap 파일 크기, 무작위 읽기), canary 모드(TCP 응답 + 처리량 기록) |
+| M1-2 | 실행 하네스 `lab/run.sh`: 스냅샷 복원 → 구성 적용 → 샘플러·프로브 시작 → 부하 → 판정 → 필요 시 강제 리셋 → `results/`에 저장 |
+| M1-3 | 파라미터 탐색: anon 크기 × file 작업집합 × 증가 속도 격자. 결과를 OOM kill / livelock / 정상의 "재현 지도"로 정리 |
+| M1-4 | 샘플러 생존 확인: 스래싱 중 샘플 누락률 측정. 누락이 크면 자기 보호를 먼저 보강 |
+| M1-5 | 보고서 `docs/reports/M1-reproduction.md`: H1·H2 판정, 측정 정의 확정 |
+
+**완료 조건**: S1이 재현 합격 기준(MemAvailable ≤ 20 MiB, OOM kill 0건, SSH 무응답 10분 이상)을 5회 중 4회 이상 충족하는 파라미터를 찾고, H1·H2를 판정한다.
+**재현 실패 시**: I/O 상한 강화 → file 비율 증가 → 증가 속도 감소 순으로 탐색하고, 재현 범위와 실패 조건을 그대로 기록한다.
+
+### M2. 기준선
+
+> **핵심**: 우리 데몬 없이 기존 방법만으로는 얼마나 버티는지 잰다. 방어 없음, 길벗의 1차 대응, systemd-oomd, MGLRU 설정을 같은 조건에서 비교한다. 이 결과가 "우리 데몬이 더 나은가"를 판단할 기준점이 되고, 정상 부하에서의 압력 수치로 감지 임계값 후보도 정한다.
+
+| ID | 작업 |
+|---|---|
+| M2-1 | 구성 프로파일 `lab/profiles/`: C0, C1, C2(oomd 기본), C2t(oomd 튜닝), C3. 적용과 원복은 멱등 |
+| M2-2 | S2(swap + `mem_limit`), S3(JVM 기동 버스트, 대량 파일 읽기) 시나리오 구현 |
+| M2-3 | 측정: 5개 구성 × S1~S3 × 5회 |
+| M2-4 | 분석 스크립트: 복구 시간 중앙값·범위, 미복구 비율, 오탐 kill, PSI 분포 그래프 |
+| M2-5 | 보정: S3의 정상 압력 PSI 분포로 트리거·판단 임계 후보를 정한다. 반복 회차를 보정용과 평가용으로 나눈다 |
+| M2-6 | 보고서 `docs/reports/M2-baseline.md`: H3·H4 1차 판정, 성공 기준 재확정 |
+
+**완료 조건**: 기준선 표가 채워지고, 성공 기준과 임계 후보가 수치로 확정된다.
+
+### M3. 데몬 MVP
+
+> **핵심**: Thrash Guard의 최소 기능 버전을 만든다. 스래싱을 감지하면 원인 컨테이너를 종료하는 것까지가 범위다. 처음에는 판단만 기록하고 종료하지 않는 dry-run으로 오탐을 확인한다.
+
+M1·M2 실험은 한 번에 수십 분이 걸린다. 실험이 도는 동안 M3-1~M3-3처럼 임계값과 무관한 부분은 WSL에서 먼저 개발해도 된다. 판단 임계값만 M2 이후에 넣는다.
+
+| ID | 작업 |
+|---|---|
+| M3-1 | 설정 파서(`key=value`)와 CLI: `--config`, `--dry-run`(기본값 on), `--foreground` |
+| M3-2 | 이벤트 루프: 시스템 PSI 트리거 등록, `poll(POLLPRI)`, 깨어난 지연 측정 |
+| M3-3 | 대상 탐색 스레드: `workload.slice` 하위 cgroup을 미리 스캔해 고정 크기 표로 유지. 유예 시간, 쿨다운, 시간당 kill 상한 |
+| M3-4 | 판단 v1(순수 함수): 트리거 후 N초 동안 PSI full 비율 ≥ X가 지속되면, 후보 중 `memory.pressure` full 증가량이 가장 큰 cgroup을 선택 |
+| M3-5 | 종료 경로: `cgroup.kill` 쓰기, 링버퍼 로그 + 기록 스레드 |
+| M3-6 | 무할당 검증: 테스트 빌드에서 `-Wl,--wrap=malloc`으로 초기화 이후 할당 횟수를 세어 0인지 확인 |
+| M3-7 | 리플레이 테스트: M2 CSV를 판단 함수에 재생해 감지 시각과 오탐을 오프라인으로 계산 |
+| M3-8 | `packaging/thrash-guard.service`: `OOMScoreAdjust=-1000` 등 |
+
+**완료 조건**: VM S1에서 dry-run 판단 로그가 남고, dry-run을 끄면 실제 kill 후 복구된다. 유휴 시 `VmRSS`·`VmLck`와 스트레스 중 루프 지연을 기록한다.
+
+### M4. MVP 평가
+
+> **핵심**: 최소 기능 데몬이 기존 방법보다 실제로 나은지 같은 실험으로 확인한다. 특히 정상적인 바쁜 상황에서 엉뚱한 프로세스를 죽이지 않는지 본다. 결과를 보고 차별화 기능(M5)을 만들 가치가 있는지 정한다.
+
+- C4 × S1~S3 × 5회 측정. 오탐, 데몬 자원 사용량, 루프 지연을 함께 본다.
+- C2t와 비교해 H5의 1차 판정을 낸다.
+- **진행 판단**: M5에서 어떤 기능이 개선 여지가 있는지 정하고, 개선 여지가 없으면 그 결과를 보고서로 남긴다.
+
+### M5. 차별화 기능 (기능별 on/off 비교)
+
+> **핵심**: 감지를 더 정확하게(여러 지표를 함께 보기), 대응을 더 부드럽게(죽이기 전에 먼저 감속) 만든다. 기능을 하나씩 켜고 끄며 각 기능이 실제로 효과가 있는지 따로 잰다.
+
+| ID | 기능 | 확인할 효과 |
+|---|---|---|
+| F1 | 복합 판단: refault, `pgsteal/pgscan` 효율, `pswpin` | S3 오탐 감소 |
+| F2 | 단계적 대응: `memory.high` 감속 → 개선 없으면 kill (감속은 별도 스레드) | kill 없이 복구되는 비율 |
+| F3 | kill 직전 스냅샷: 대상 `memory.stat`, 프로세스 목록을 고정 버퍼에 보관 | 사후 분석 가능성 (정성 평가) |
+
+각 기능은 하나씩 켜서 C4 대비 차이를 잰다. 모두 켠 것이 C5다.
+
+### M6. 최종 측정과 공개
+
+> **핵심**: 길벗과 같은 AWS t3.micro에서 모든 구성을 다시 측정해 공식 수치를 만든다. 측정 뒤 서버는 바로 삭제하고, README와 최종 보고서로 공개한다.
+
+| ID | 작업 |
+|---|---|
+| M6-1 | `infra/`: Terraform(길벗과 분리한 state), 대상 t3.micro(22.04, gp3 고정, 크레딧 모드 고정) + 같은 VPC의 측정자 인스턴스 |
+| M6-2 | AWS 커널의 MGLRU 기본값과 config 확인, 메타데이터 기록 |
+| M6-3 | 전 구성 측정, 실행 후 `terraform destroy` 확인, 비용 기록 |
+| M6-4 | README, 최종 보고서, 라이선스(D8) |
+
+### M7. 선택 과제
+
+> **핵심**: 여력이 있을 때만 하는 심화 연구다. 커널 내부를 더 깊이 관찰하거나 커널 자체를 고쳐 보는 실험이다.
+
+eBPF로 직접 회수 지연 측정, QEMU에서 커널 패치 실험.
+
+## 5. 의존 관계
+
+```text
+M0-1 ─ M0-2 ─┬─ M0-3 ─ M0-4 ─┐
+             │                ├─ M0 완료 ─ M1 ─ M2 ─┬─ M4 ─ M5 ─ M6
+M0-6 ─ M0-7 ─┘                │                     │
+                              └──── M3-1~3 (병행) ───┘
+                                    M3-4~ (M2 이후 임계값 반영)
+```
+
+## 6. 작업 규칙
+
+- 코드 주석·커밋 메시지·문서는 한국어, 식별자는 영어.
+- 할당 금지 구간은 함수 위에 `/* 핵심 경로: 할당 금지 */`로 표시한다.
+- 실측과 추론을 구분하고, 측정하지 않은 수치는 문서에 쓰지 않는다.
+- 설계 결정이 바뀌면 `docs/decisions/`에 짧은 기록을 남긴다.

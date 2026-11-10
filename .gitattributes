@@ -1,0 +1,9 @@
+# 저장소가 Windows 경로에 있어도 셸 스크립트와 소스가 LF를 유지하도록 강제한다.
+* text=auto eol=lf
+
+# /proc 캡처 fixture는 바이트 그대로 보존한다.
+tests/fixtures/** -text
+
+*.png binary
+*.qcow2 binary
+*.img binary
