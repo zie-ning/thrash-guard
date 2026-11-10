@@ -23,7 +23,7 @@ INC    := -Isrc/common
 BUILD  := build/$(LIBC)
 TBUILD := build/test
 
-COMMON_SRC := src/common/procfs.c src/common/selfprot.c src/common/fmt.c
+COMMON_SRC := src/common/procfs.c src/common/selfprot.c src/common/fmt.c src/common/cgscan.c
 SAMPLER_SRC := src/sampler/main.c
 LOAD_SRC := workload/tg_load.c
 
@@ -47,7 +47,7 @@ $(LOAD): $(LOAD_SRC)
 TEST_CC ?= cc
 TEST_CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined \
                -fno-sanitize-recover=all -DTG_FIXTURE_DIR='"tests/fixtures"'
-TESTS := $(TBUILD)/test_procfs $(TBUILD)/test_fmt
+TESTS := $(TBUILD)/test_procfs $(TBUILD)/test_fmt $(TBUILD)/test_cgscan
 
 $(TBUILD)/test_%: tests/test_%.c $(COMMON_SRC) tests/tg_test.h $(wildcard src/common/*.h)
 	@mkdir -p $(@D)
@@ -55,6 +55,7 @@ $(TBUILD)/test_%: tests/test_%.c $(COMMON_SRC) tests/tg_test.h $(wildcard src/co
 
 test: $(TESTS)
 	@set -e; for t in $(TESTS); do echo "== $$t"; ./$$t; done
+	python3 -m unittest discover -s tests -p 'test_*.py'
 
 lint:
 	cppcheck --enable=warning,performance,portability --std=c11 --error-exitcode=1 \

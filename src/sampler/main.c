@@ -14,7 +14,15 @@
  *   read_us : 세 파일을 읽고 해석하는 데 걸린 시간
  *   skipped : 늦어져서 건너뛴 주기 수(누적)
  *   err     : 읽기 실패 비트 (1 PSI, 2 vmstat, 4 meminfo)
+ *
+ * --cg-parent를 주면 부모 cgroup의 직계 하위(컨테이너)마다 줄을 하나씩 더 보낸다(D12).
+ *   tg1 kind=cg sseq=.. mono_us=.. idx=.. name=.. err=.. psi_some_total=.. psi_full_total=.. anon=.. ...
+ *
+ *   sseq    : 같은 시각의 kind=sample 줄의 seq. 수신기의 누락 검사가 seq=만 보므로 이름을 달리했다
+ *   err     : 읽기 실패 비트 (1 memory.pressure, 2 memory.stat, 4 memory.events)
+ *   목록은 시작할 때 찾아 두고, 컨테이너가 바뀌면(재시작 등) 다시 찾는다.
  */
+#include "cgscan.h"
 #include "fmt.h"
 #include "procfs.h"
 #include "selfprot.h"
@@ -39,10 +47,17 @@ enum {
     ERR_MEMINFO = 4,
 };
 
+enum {
+    CGERR_PRESSURE = 1,
+    CGERR_STAT = 2,
+    CGERR_EVENTS = 4,
+};
+
 struct config {
     const char *dest;    /* "IP:PORT". NULL이면 표준 출력 */
     long interval_ms;
     int mlock;
+    const char *cg_parent; /* NULL이면 cgroup 수집을 하지 않는다 */
 };
 
 /* 초기화 때 준비하고 루프에서는 재사용만 하는 상태 */
@@ -52,6 +67,7 @@ static struct {
     int meminfo_fd;
     int out_fd;      /* UDP 소켓 또는 표준 출력 */
     int is_udp;
+    struct tg_cg_set cgs;
     char read_buf[READ_CAP];
     char line[LINE_CAP];
 } st;
@@ -67,9 +83,10 @@ static void on_signal(int sig)
 static void usage(void)
 {
     fprintf(stderr,
-            "사용법: tg-sampler [--dest IP:PORT] [--interval-ms N] [--no-mlock]\n"
+            "사용법: tg-sampler [--dest IP:PORT] [--interval-ms N] [--cg-parent DIR] [--no-mlock]\n"
             "  --dest         수신기 주소. 생략하면 표준 출력으로 쓴다\n"
             "  --interval-ms  수집 주기(밀리초, 50~10000, 기본 250)\n"
+            "  --cg-parent    이 cgroup의 하위(컨테이너)별 지표도 보낸다(예: /sys/fs/cgroup/workload.slice)\n"
             "  --no-mlock     mlockall을 하지 않는다(개발용)\n");
 }
 
@@ -80,6 +97,7 @@ static int parse_args(int argc, char **argv, struct config *cfg)
     cfg->dest = NULL;
     cfg->interval_ms = 250;
     cfg->mlock = 1;
+    cfg->cg_parent = NULL;
 
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--dest") == 0 && i + 1 < argc) {
@@ -91,6 +109,8 @@ static int parse_args(int argc, char **argv, struct config *cfg)
                 fprintf(stderr, "잘못된 --interval-ms: %s\n", argv[i]);
                 return -1;
             }
+        } else if (strcmp(argv[i], "--cg-parent") == 0 && i + 1 < argc) {
+            cfg->cg_parent = argv[++i];
         } else if (strcmp(argv[i], "--no-mlock") == 0) {
             cfg->mlock = 0;
         } else {
@@ -224,6 +244,7 @@ static void sample_once(uint64_t seq, int64_t now_us, int64_t late_us, uint64_t 
     tg_buf_kv_u64(&b, "skipped", skipped);
     tg_buf_kv_u64(&b, "send_err", *send_err);
     tg_buf_kv_u64(&b, "err", err);
+    tg_buf_kv_u64(&b, "cg_n", st.cgs.n);
 
     tg_buf_kv_u64(&b, "psi_some_total", psi.some.total_us);
     tg_buf_kv_u64(&b, "psi_full_total", psi.full.total_us);
@@ -259,6 +280,66 @@ static void sample_once(uint64_t seq, int64_t now_us, int64_t late_us, uint64_t 
     emit(b.len, send_err);
 }
 
+/* 핵심 경로: 할당 금지 */
+static void sample_cgroups(uint64_t sseq, int64_t now_us, uint64_t *send_err)
+{
+    size_t i;
+
+    for (i = 0; i < st.cgs.n; i++) {
+        struct tg_cg_target *t = &st.cgs.t[i];
+        struct tg_psi psi;
+        struct tg_cg_memstat ms;
+        struct tg_cg_events ev;
+        struct tg_buf b;
+        unsigned err = 0;
+        size_t len = 0;
+
+        memset(&psi, 0, sizeof(psi));
+        memset(&ms, 0, sizeof(ms));
+        memset(&ev, 0, sizeof(ev));
+
+        if (tg_read_fd(t->pressure_fd, st.read_buf, sizeof(st.read_buf), &len) != 0 ||
+            tg_psi_parse(st.read_buf, len, &psi) != 0)
+            err |= CGERR_PRESSURE;
+        if (tg_read_fd(t->stat_fd, st.read_buf, sizeof(st.read_buf), &len) != 0 ||
+            tg_cg_memstat_parse(st.read_buf, len, &ms, NULL) != 0)
+            err |= CGERR_STAT;
+        if (t->events_fd >= 0 &&
+            (tg_read_fd(t->events_fd, st.read_buf, sizeof(st.read_buf), &len) != 0 ||
+             tg_cg_events_parse(st.read_buf, len, &ev, NULL) != 0))
+            err |= CGERR_EVENTS;
+        /* 사라졌거나 읽을 수 없는 cgroup이다. 다음 주기에 목록을 다시 만든다. */
+        if (err & (CGERR_PRESSURE | CGERR_STAT))
+            tg_cg_set_mark_stale(&st.cgs);
+
+        tg_buf_init(&b, st.line, sizeof(st.line) - 1);
+        tg_buf_str(&b, "tg1");
+        tg_buf_str(&b, " kind=cg");
+        tg_buf_kv_u64(&b, "sseq", sseq);
+        tg_buf_kv_i64(&b, "mono_us", now_us);
+        tg_buf_kv_u64(&b, "idx", i);
+        tg_buf_kv_str(&b, "name", t->name);
+        tg_buf_kv_u64(&b, "err", err);
+        tg_buf_kv_u64(&b, "psi_some_total", psi.some.total_us);
+        tg_buf_kv_u64(&b, "psi_full_total", psi.full.total_us);
+        tg_buf_kv_u64(&b, "psi_some_avg10", psi.some.avg10);
+        tg_buf_kv_u64(&b, "psi_full_avg10", psi.full.avg10);
+        tg_buf_kv_u64(&b, "anon", ms.anon);
+        tg_buf_kv_u64(&b, "file", ms.file);
+        tg_buf_kv_u64(&b, "shmem", ms.shmem);
+        tg_buf_kv_u64(&b, "refault_anon", ms.workingset_refault_anon);
+        tg_buf_kv_u64(&b, "refault_file", ms.workingset_refault_file);
+        tg_buf_kv_u64(&b, "pgscan", ms.pgscan);
+        tg_buf_kv_u64(&b, "pgsteal", ms.pgsteal);
+        tg_buf_kv_u64(&b, "pgmajfault", ms.pgmajfault);
+        tg_buf_kv_u64(&b, "ev_high", ev.high);
+        tg_buf_kv_u64(&b, "ev_max", ev.max);
+        tg_buf_kv_u64(&b, "ev_oom", ev.oom);
+        tg_buf_kv_u64(&b, "ev_oom_kill", ev.oom_kill);
+        emit(b.len, send_err);
+    }
+}
+
 static int init(const struct config *cfg)
 {
     struct tg_selfprot_opts opts = {
@@ -275,6 +356,16 @@ static int init(const struct config *cfg)
         return -1;
     st.vmstat_fd = open_ro("/proc/vmstat", 1);
     st.meminfo_fd = open_ro("/proc/meminfo", 1);
+
+    /* cgroup 수집은 선택 기능이다. 부모가 없어도 시스템 지표 수집은 계속한다. */
+    tg_cg_set_init(&st.cgs);
+    if (cfg->cg_parent != NULL) {
+        int rc = tg_cg_set_open(&st.cgs, cfg->cg_parent);
+
+        if (rc != 0)
+            fprintf(stderr, "tg-sampler: 경고: %s 열기 실패: %s (cgroup 수집 안 함)\n",
+                    cfg->cg_parent, strerror(-rc));
+    }
 
     if (cfg->dest != NULL) {
         st.out_fd = open_udp(cfg->dest);
@@ -337,7 +428,10 @@ int main(int argc, char **argv)
 
         now_us = mono_us();
         late_us = now_us - next_us;
-        sample_once(seq++, now_us, late_us, skipped, &send_err);
+        tg_cg_set_refresh(&st.cgs);
+        sample_once(seq, now_us, late_us, skipped, &send_err);
+        sample_cgroups(seq, now_us, &send_err);
+        seq++;
 
         /* 늦게 깨어났다면 밀린 주기를 몰아서 수집하지 않고 건너뛴다. */
         next_us += interval_us;
