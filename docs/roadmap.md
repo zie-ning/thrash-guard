@@ -172,7 +172,7 @@ thrash-guard/
 
 | ID | 작업 |
 |---|---|
-| M2-1 | 구성 프로파일 `lab/profiles/`: C0, C1, C2(oomd 기본, `systemd-oomd` 설치 포함), C2t(oomd 튜닝), C3. 적용과 원복은 멱등 |
+| M2-1 | 구성 프로파일 `lab/profiles/`: C0, C1, C2(oomd 기본, `systemd-oomd` 설치 포함), C2t(oomd 튜닝), C3. 적용과 원복은 멱등. oomd는 설치만으로는 `workload.slice`를 감시하지 않으므로 C2·C2t 모두 `ManagedOOMMemoryPressure=kill`을 설정하고 `oomctl`로 감시 대상을 확인한다(C2의 임계값은 기본값 유지) |
 | M2-2 | S2(swap + `mem_limit`), S3(JVM 기동 버스트, 대량 파일 읽기) 시나리오 구현 |
 | M2-3 | 측정: 5개 구성 × S1~S3 × 5회 |
 | M2-4 | 분석 스크립트: 복구 시간 중앙값·범위, 미복구 비율, 오탐 kill, PSI 분포 그래프 |

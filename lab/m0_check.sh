@@ -39,13 +39,20 @@ pids+=($!)
 vm_scp "$TG_ROOT/build/glibc/tg-sampler" /tmp/
 vm_ssh "sudo nohup /tmp/tg-sampler --dest $GUEST_HOST_IP:$RECV_PORT --interval-ms 250 \
         >/tmp/sampler.out 2>&1 </dev/null &"
+sleep 1
+vm_ssh 'pgrep -x tg-sampler >/dev/null' \
+    || { echo "tg-sampler가 시작되지 않았다:" >&2; vm_ssh 'cat /tmp/sampler.out' >&2 || true; exit 1; }
 
 log "기준 구간 15초"
-sleep 15
+sleep 14
 log "stress-ng ${STRESS_SEC}초 (익명 메모리 ${STRESS_BYTES})"
 vm_ssh "sudo nohup stress-ng --vm 2 --vm-bytes $STRESS_BYTES --vm-keep --timeout ${STRESS_SEC}s \
-        >/tmp/stress.out 2>&1 </dev/null &" || true
-sleep "$STRESS_SEC"
+        >/tmp/stress.out 2>&1 </dev/null &"
+sleep 2
+# 부하가 실제로 걸리지 않았는데 결과가 정상 부하처럼 기록되는 일을 막는다.
+vm_ssh 'pgrep -x stress-ng >/dev/null' \
+    || { echo "stress-ng가 시작되지 않았다:" >&2; vm_ssh 'cat /tmp/stress.out' >&2 || true; exit 1; }
+sleep $((STRESS_SEC - 2))
 log "회복 구간 20초"
 sleep 20
 

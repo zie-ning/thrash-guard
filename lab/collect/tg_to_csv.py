@@ -42,7 +42,8 @@ def main() -> int:
         print("변환할 줄이 없다", file=sys.stderr)
         return 1
 
-    fields = list(rows[0].keys())
+    # 샘플러가 나중에 key를 추가해도 열이 버려지지 않도록 모든 행의 key를 처음 나온 순서대로 모은다.
+    fields = list(dict.fromkeys(k for row in rows for k in row))
     out = open(args.out, "w", newline="", encoding="utf-8") if args.out else sys.stdout
     w = csv.DictWriter(out, fieldnames=fields, extrasaction="ignore", lineterminator="\n")
     w.writeheader()

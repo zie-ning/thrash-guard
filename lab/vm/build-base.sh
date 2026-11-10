@@ -19,6 +19,12 @@ if [ ! -f "$SSH_KEY" ]; then
     ssh-keygen -q -t ed25519 -N "" -C "thrash-guard-vm" -f "$SSH_KEY"
 fi
 
+# 다른 VM이 같은 QMP 포트를 쓰고 있으면 그 VM을 건드리지 않도록 빌드를 시작하지 않는다.
+if python3 "$VM_DIR/qmp.py" status "$QMP_PORT" >/dev/null 2>&1; then
+    echo "실행 중인 VM이 있다 (QMP $QMP_PORT). stop.sh로 먼저 종료하라." >&2
+    exit 1
+fi
+
 build="$IMG_DIR/build.qcow2"
 seed="$IMG_DIR/seed"
 rm -f "$build"
@@ -44,15 +50,26 @@ EOF
 
 python3 -m http.server "$SEED_PORT" --bind 127.0.0.1 --directory "$seed" >"$IMG_DIR/seed-http.log" 2>&1 &
 http_pid=$!
-cleanup() { kill "$http_pid" 2>/dev/null || true; }
+vm_started=0
+stop_seed() { kill "$http_pid" 2>/dev/null || true; }
+cleanup() {
+    stop_seed
+    # 이번 빌드가 켠 VM이 남아 있으면 끈다. 시작 전에 다른 VM이 없음을 확인했으므로
+    # QMP 포트의 VM은 이 빌드의 것이고, 작업용 오버레이는 버려도 된다.
+    if [ "$vm_started" -eq 1 ] && python3 "$VM_DIR/qmp.py" status "$QMP_PORT" >/dev/null 2>&1; then
+        log "실패 정리: 빌드용 VM 종료"
+        python3 "$VM_DIR/qmp.py" quit "$QMP_PORT" >/dev/null 2>&1 || true
+    fi
+}
 trap cleanup EXIT
 
+vm_started=1
 "$VM_DIR/start.sh" "$build" --no-throttle --seed
 
 log "SSH 대기 (최대 10분)"
 wait_ssh 600 || { echo "SSH 접속 실패. $IMG_DIR/serial.log 확인" >&2; exit 1; }
 vm_ssh 'cloud-init status --wait' || true
-cleanup
+stop_seed
 
 log "프로비저닝"
 vm_scp "$VM_DIR/provision.sh" "$VM_DIR/verify.sh" /tmp/
@@ -68,10 +85,17 @@ wait_ssh 300 || { echo "재시작 후 SSH 접속 실패. $IMG_DIR/serial.log 확
 
 vm_scp "$VM_DIR/verify.sh" /tmp/
 vm_ssh 'sudo bash /tmp/verify.sh' | tee "$IMG_DIR/base-info.txt"
+# verify.sh는 기록만 하므로, 실험 전제인 6.8 커널로 부팅했는지 따로 확인한다.
+kernel="$(vm_ssh 'uname -r')"
+case "$kernel" in
+    6.8.*) log "커널 확인: $kernel" ;;
+    *) echo "6.8 커널로 부팅하지 않았다: $kernel ($IMG_DIR/base-info.txt 확인)" >&2; exit 1 ;;
+esac
 
 log "종료"
 vm_ssh 'sudo touch /etc/cloud/cloud-init.disabled && sudo systemctl poweroff' || true
 wait_qemu_exit 120 || log "정상 종료 시간 초과, 강제 종료함"
+vm_started=0
 
 log "기준 이미지로 변환: $(basename "$BASE_IMG")"
 rm -f "$BASE_IMG"

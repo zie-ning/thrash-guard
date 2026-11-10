@@ -26,17 +26,22 @@ echo "oomd=$(systemctl is-active systemd-oomd 2>/dev/null || true)"
 EOF
 
 git_sha="$(git -C "$TG_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
-git_dirty="$(git -C "$TG_ROOT" status --porcelain 2>/dev/null | grep -q . && echo True || echo False)"
+# 추적 중인 파일의 변경만 본다. 아직 추적하지 않는 결과 디렉터리 등은 제외한다.
+git_dirty="$(git -C "$TG_ROOT" status --porcelain --untracked-files=no 2>/dev/null | grep -q . && echo 1 || echo 0)"
 
-python3 - "$out/vm_kv.txt" "$out/meta.json" <<EOF
-import json, sys, datetime
+# 셸 값은 환경 변수로 넘겨 Python 코드로 해석되지 않게 한다.
+GIT_SHA="$git_sha" GIT_DIRTY="$git_dirty" M_MEM="$VM_MEM_MB" M_CPUS="$VM_CPUS" \
+M_IOPS="$VM_IOPS" M_BPS="$VM_BPS" \
+python3 - "$out/vm_kv.txt" "$out/meta.json" <<'EOF'
+import json, os, sys, datetime
 vm = dict(l.rstrip("\n").split("=", 1) for l in open(sys.argv[1]) if "=" in l)
+e = os.environ
 meta = {
     "recorded_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-    "git": {"sha": "$git_sha", "dirty": $git_dirty},
+    "git": {"sha": e["GIT_SHA"], "dirty": e["GIT_DIRTY"] == "1"},
     "vm": {
-        "mem_mb": $VM_MEM_MB, "cpus": $VM_CPUS,
-        "io_limit": {"iops": $VM_IOPS, "bytes_per_sec": $VM_BPS},
+        "mem_mb": int(e["M_MEM"]), "cpus": int(e["M_CPUS"]),
+        "io_limit": {"iops": int(e["M_IOPS"]), "bytes_per_sec": int(e["M_BPS"])},
         "hypervisor": "qemu-whpx",
     },
     "guest": vm,

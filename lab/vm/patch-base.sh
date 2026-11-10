@@ -11,6 +11,9 @@ script="${1:?스크립트 경로가 필요하다}"
 [ -f "$BASE_IMG" ] || { echo "기준 이미지가 없다" >&2; exit 1; }
 
 "$VM_DIR/stop.sh" --force >/dev/null 2>&1 || true
+# 패치 중 실패해도 기준 이미지를 연 VM이 남지 않도록, 정상 종료(ACPI)를 먼저 시도하고 정리한다.
+# 정상 경로에서는 이미 꺼져 있으므로 아무 일도 하지 않는다.
+trap '"$VM_DIR/stop.sh" >/dev/null 2>&1 || true' EXIT
 "$VM_DIR/start.sh" "$BASE_IMG" --no-throttle
 wait_ssh 300 || { echo "SSH 접속 실패" >&2; exit 1; }
 vm_scp "$script" /tmp/patch.sh

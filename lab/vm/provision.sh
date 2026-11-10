@@ -6,6 +6,11 @@ export DEBIAN_FRONTEND=noninteractive
 # 실험 중 예고 없이 디스크·메모리를 쓰는 자동 업데이트를 끈다. 실행마다 조건이 달라지는 것을 막는다.
 systemctl disable --now apt-daily.timer apt-daily-upgrade.timer || true
 systemctl disable --now unattended-upgrades.service || true
+# 타이머를 꺼도 이미 돌고 있는 apt 서비스가 패키지 목록 잠금을 쥐고 있을 수 있다. 끝날 때까지 기다린다.
+for _ in $(seq 1 120); do
+    systemctl is-active --quiet apt-daily.service apt-daily-upgrade.service || break
+    sleep 5
+done
 
 apt-get update
 # 6.8 계열 HWE 커널. VM용 virtual 변형은 linux-firmware 등 실험과 무관한 큰 패키지를 끌어오지 않는다.
