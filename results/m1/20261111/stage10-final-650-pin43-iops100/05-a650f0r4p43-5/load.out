@@ -1,0 +1,70 @@
+==> /tmp/tg-anon.out <==
+tg-load mode=anon t_s=86 alloc_mib=343 touches=35648256 max_batch_ms=1
+tg-load mode=anon t_s=87 alloc_mib=347 touches=36832000 max_batch_ms=1
+tg-load mode=anon t_s=88 alloc_mib=351 touches=38382592 max_batch_ms=1
+tg-load mode=anon t_s=89 alloc_mib=355 touches=36817408 max_batch_ms=1
+tg-load mode=anon t_s=90 alloc_mib=359 touches=38218240 max_batch_ms=1
+tg-load mode=anon t_s=91 alloc_mib=363 touches=37541376 max_batch_ms=1
+tg-load mode=anon t_s=92 alloc_mib=367 touches=37782528 max_batch_ms=2
+tg-load mode=anon t_s=93 alloc_mib=371 touches=36884224 max_batch_ms=2
+tg-load mode=anon t_s=94 alloc_mib=375 touches=37315328 max_batch_ms=1
+tg-load mode=anon t_s=95 alloc_mib=379 touches=37512448 max_batch_ms=1
+tg-load mode=anon t_s=96 alloc_mib=383 touches=36861952 max_batch_ms=1
+tg-load mode=anon t_s=97 alloc_mib=387 touches=37594880 max_batch_ms=1
+tg-load mode=anon t_s=98 alloc_mib=391 touches=36874240 max_batch_ms=1
+tg-load mode=anon t_s=99 alloc_mib=395 touches=36503040 max_batch_ms=1
+tg-load mode=anon t_s=100 alloc_mib=399 touches=36489984 max_batch_ms=1
+tg-load mode=anon t_s=101 alloc_mib=400 touches=256 max_batch_ms=0
+tg-load mode=anon t_s=102 alloc_mib=408 touches=36163328 max_batch_ms=1
+tg-load mode=anon t_s=103 alloc_mib=412 touches=35903232 max_batch_ms=2
+tg-load mode=anon t_s=104 alloc_mib=416 touches=35826176 max_batch_ms=2
+tg-load mode=anon t_s=105 alloc_mib=420 touches=36267776 max_batch_ms=1
+tg-load mode=anon t_s=106 alloc_mib=424 touches=35094016 max_batch_ms=3
+tg-load mode=anon t_s=107 alloc_mib=428 touches=30728704 max_batch_ms=7
+tg-load mode=anon t_s=108 alloc_mib=432 touches=35258368 max_batch_ms=4
+tg-load mode=anon t_s=109 alloc_mib=436 touches=34299648 max_batch_ms=8
+tg-load mode=anon t_s=110 alloc_mib=440 touches=454144 max_batch_ms=1
+tg-load mode=anon t_s=111 alloc_mib=444 touches=17671936 max_batch_ms=507
+tg-load mode=anon t_s=112 alloc_mib=448 touches=25277440 max_batch_ms=1
+tg-load mode=anon t_s=113 alloc_mib=449 touches=256 max_batch_ms=0
+tg-load mode=anon t_s=114 alloc_mib=454 touches=13926912 max_batch_ms=695
+tg-load mode=anon t_s=115 alloc_mib=455 touches=256 max_batch_ms=1
+
+==> /tmp/tg-pin.out <==
+tg-load mode=pin t_s=112 pinned_mib=43
+tg-load mode=pin t_s=113 pinned_mib=43
+tg-load mode=pin t_s=114 pinned_mib=43
+tg-load mode=pin t_s=115 pinned_mib=43
+tg-load mode=pin t_s=116 pinned_mib=43
+tg-load mode=pin t_s=117 pinned_mib=43
+tg-load mode=pin t_s=118 pinned_mib=43
+tg-load mode=pin t_s=119 pinned_mib=43
+tg-load mode=pin t_s=120 pinned_mib=43
+tg-load mode=pin t_s=121 pinned_mib=43
+tg-load mode=pin t_s=122 pinned_mib=43
+tg-load mode=pin t_s=123 pinned_mib=43
+tg-load mode=pin t_s=124 pinned_mib=43
+tg-load mode=pin t_s=125 pinned_mib=43
+tg-load mode=pin t_s=126 pinned_mib=43
+tg-load mode=pin t_s=127 pinned_mib=43
+tg-load mode=pin t_s=129 pinned_mib=43
+tg-load mode=pin t_s=130 pinned_mib=43
+tg-load mode=pin t_s=132 pinned_mib=43
+tg-load mode=pin t_s=140 pinned_mib=43
+tg-load mode=pin t_s=141 pinned_mib=43
+tg-load mode=pin t_s=142 pinned_mib=43
+tg-load mode=pin t_s=143 pinned_mib=43
+tg-load mode=pin t_s=144 pinned_mib=43
+tg-load mode=pin t_s=145 pinned_mib=43
+tg-load mode=pin t_s=146 pinned_mib=43
+tg-load mode=pin t_s=147 pinned_mib=43
+tg-load mode=pin t_s=148 pinned_mib=43
+tg-load mode=pin t_s=149 pinned_mib=43
+tg-load mode=pin t_s=150 pinned_mib=43
+[  224.492209] landscape-sysin invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=0
+[  224.492260]  oom_kill_process+0x118/0x280
+[  224.492261]  ? oom_evaluate_task+0x143/0x1e0
+[  224.492265]  __alloc_pages_may_oom+0x112/0x1e0
+[  224.492470] [  pid  ]   uid  tgid total_vm      rss rss_anon rss_file rss_shmem pgtables_bytes swapents oom_score_adj name
+[  224.492753] oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=user.slice,mems_allowed=0,global_oom,task_memcg=/user.slice/user-1000.slice/session-30.scope,task=tg-load,pid=2584,uid=0
+[  224.492784] Out of memory: Killed process 2584 (tg-load) total-vm:667668kB, anon-rss:476032kB, file-rss:128kB, shmem-rss:0kB, UID:0 pgtables:972kB oom_score_adj:0

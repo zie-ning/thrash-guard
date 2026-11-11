@@ -1,0 +1,102 @@
+==> /tmp/tg-anon.out <==
+tg-load mode=anon t_s=130 alloc_mib=520 touches=28713216 max_batch_ms=5
+tg-load mode=anon t_s=131 alloc_mib=524 touches=28485888 max_batch_ms=5
+tg-load mode=anon t_s=132 alloc_mib=528 touches=27904768 max_batch_ms=6
+tg-load mode=anon t_s=133 alloc_mib=532 touches=28137216 max_batch_ms=5
+tg-load mode=anon t_s=134 alloc_mib=536 touches=28368128 max_batch_ms=6
+tg-load mode=anon t_s=135 alloc_mib=540 touches=28949760 max_batch_ms=5
+tg-load mode=anon t_s=136 alloc_mib=544 touches=26218240 max_batch_ms=5
+tg-load mode=anon t_s=137 alloc_mib=548 touches=28106752 max_batch_ms=4
+tg-load mode=anon t_s=138 alloc_mib=552 touches=26749184 max_batch_ms=5
+tg-load mode=anon t_s=139 alloc_mib=556 touches=28657408 max_batch_ms=5
+tg-load mode=anon t_s=140 alloc_mib=560 touches=27553280 max_batch_ms=5
+tg-load mode=anon t_s=141 alloc_mib=564 touches=28346880 max_batch_ms=2
+tg-load mode=anon t_s=142 alloc_mib=568 touches=28555264 max_batch_ms=7
+tg-load mode=anon t_s=143 alloc_mib=572 touches=15661568 max_batch_ms=5
+tg-load mode=anon t_s=144 alloc_mib=576 touches=29102592 max_batch_ms=2
+tg-load mode=anon t_s=145 alloc_mib=580 touches=22211584 max_batch_ms=273
+tg-load mode=anon t_s=146 alloc_mib=584 touches=7426304 max_batch_ms=349
+tg-load mode=anon t_s=147 alloc_mib=588 touches=17872128 max_batch_ms=5
+tg-load mode=anon t_s=148 alloc_mib=592 touches=32186368 max_batch_ms=1
+tg-load mode=anon t_s=149 alloc_mib=596 touches=29160960 max_batch_ms=2
+tg-load mode=anon t_s=150 alloc_mib=600 touches=26276096 max_batch_ms=2
+tg-load mode=anon t_s=151 alloc_mib=604 touches=29546240 max_batch_ms=1
+tg-load mode=anon t_s=152 alloc_mib=608 touches=30930944 max_batch_ms=1
+tg-load mode=anon t_s=153 alloc_mib=612 touches=30548480 max_batch_ms=1
+tg-load mode=anon t_s=154 alloc_mib=616 touches=31066624 max_batch_ms=1
+tg-load mode=anon t_s=155 alloc_mib=617 touches=256 max_batch_ms=0
+tg-load mode=anon t_s=156 alloc_mib=625 touches=16311552 max_batch_ms=247
+tg-load mode=anon t_s=157 alloc_mib=629 touches=18625792 max_batch_ms=140
+tg-load mode=anon t_s=158 alloc_mib=632 touches=16866560 max_batch_ms=303
+tg-load mode=anon t_s=159 alloc_mib=633 touches=256 max_batch_ms=0
+
+==> /tmp/tg-file.out <==
+tg-load mode=file t_s=116 file_mib=50 reads=154053888 max_batch_ms=5
+tg-load mode=file t_s=117 file_mib=50 reads=147688960 max_batch_ms=5
+tg-load mode=file t_s=118 file_mib=50 reads=141170176 max_batch_ms=5
+tg-load mode=file t_s=119 file_mib=50 reads=141870080 max_batch_ms=4
+tg-load mode=file t_s=120 file_mib=50 reads=148813312 max_batch_ms=4
+tg-load mode=file t_s=121 file_mib=50 reads=155517440 max_batch_ms=5
+tg-load mode=file t_s=122 file_mib=50 reads=136007424 max_batch_ms=5
+tg-load mode=file t_s=123 file_mib=50 reads=148063488 max_batch_ms=4
+tg-load mode=file t_s=124 file_mib=50 reads=154160128 max_batch_ms=5
+tg-load mode=file t_s=125 file_mib=50 reads=147510528 max_batch_ms=3
+tg-load mode=file t_s=126 file_mib=50 reads=154566144 max_batch_ms=4
+tg-load mode=file t_s=127 file_mib=50 reads=151553280 max_batch_ms=5
+tg-load mode=file t_s=128 file_mib=50 reads=148990208 max_batch_ms=3
+tg-load mode=file t_s=129 file_mib=50 reads=152741632 max_batch_ms=5
+tg-load mode=file t_s=130 file_mib=50 reads=151213312 max_batch_ms=4
+tg-load mode=file t_s=131 file_mib=50 reads=141697792 max_batch_ms=4
+tg-load mode=file t_s=132 file_mib=50 reads=144566784 max_batch_ms=4
+tg-load mode=file t_s=133 file_mib=50 reads=143385088 max_batch_ms=4
+tg-load mode=file t_s=134 file_mib=50 reads=147104000 max_batch_ms=3
+tg-load mode=file t_s=135 file_mib=50 reads=147439360 max_batch_ms=4
+tg-load mode=file t_s=136 file_mib=50 reads=135247616 max_batch_ms=5
+tg-load mode=file t_s=137 file_mib=50 reads=145137664 max_batch_ms=3
+tg-load mode=file t_s=138 file_mib=50 reads=137677056 max_batch_ms=3
+tg-load mode=file t_s=139 file_mib=50 reads=147757312 max_batch_ms=4
+tg-load mode=file t_s=140 file_mib=50 reads=145366016 max_batch_ms=5
+tg-load mode=file t_s=141 file_mib=50 reads=139388928 max_batch_ms=8
+tg-load mode=file t_s=142 file_mib=50 reads=164034304 max_batch_ms=2
+tg-load mode=file t_s=143 file_mib=50 reads=118937088 max_batch_ms=5
+tg-load mode=file t_s=144 file_mib=50 reads=153812736 max_batch_ms=2
+tg-load mode=file t_s=248 file_mib=50 reads=256 max_batch_ms=102059
+
+==> /tmp/tg-pin.out <==
+tg-load mode=pin t_s=158 pinned_mib=43
+tg-load mode=pin t_s=159 pinned_mib=43
+tg-load mode=pin t_s=160 pinned_mib=43
+tg-load mode=pin t_s=161 pinned_mib=43
+tg-load mode=pin t_s=162 pinned_mib=43
+tg-load mode=pin t_s=163 pinned_mib=43
+tg-load mode=pin t_s=164 pinned_mib=43
+tg-load mode=pin t_s=165 pinned_mib=43
+tg-load mode=pin t_s=166 pinned_mib=43
+tg-load mode=pin t_s=167 pinned_mib=43
+tg-load mode=pin t_s=168 pinned_mib=43
+tg-load mode=pin t_s=169 pinned_mib=43
+tg-load mode=pin t_s=170 pinned_mib=43
+tg-load mode=pin t_s=171 pinned_mib=43
+tg-load mode=pin t_s=173 pinned_mib=43
+tg-load mode=pin t_s=174 pinned_mib=43
+tg-load mode=pin t_s=177 pinned_mib=43
+tg-load mode=pin t_s=254 pinned_mib=43
+tg-load mode=pin t_s=255 pinned_mib=43
+tg-load mode=pin t_s=256 pinned_mib=43
+tg-load mode=pin t_s=257 pinned_mib=43
+tg-load mode=pin t_s=258 pinned_mib=43
+tg-load mode=pin t_s=259 pinned_mib=43
+tg-load mode=pin t_s=260 pinned_mib=43
+tg-load mode=pin t_s=261 pinned_mib=43
+tg-load mode=pin t_s=262 pinned_mib=43
+tg-load mode=pin t_s=263 pinned_mib=43
+tg-load mode=pin t_s=264 pinned_mib=43
+tg-load mode=pin t_s=265 pinned_mib=43
+tg-load mode=pin t_s=266 pinned_mib=43
+[  376.291342] systemd-timesyn invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=0
+[  376.291379]  oom_kill_process+0x118/0x280
+[  376.291381]  ? oom_evaluate_task+0x143/0x1e0
+[  376.291386]  __alloc_pages_may_oom+0x112/0x1e0
+[  376.291497] [  pid  ]   uid  tgid total_vm      rss rss_anon rss_file rss_shmem pgtables_bytes swapents oom_score_adj name
+[  376.291574] oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=systemd-timesyncd.service,mems_allowed=0,global_oom,task_memcg=/user.slice/user-1000.slice/session-33.scope,task=tg-load,pid=2800,uid=0
+[  376.291613] Out of memory: Killed process 2800 (tg-load) total-vm:667668kB, anon-rss:656256kB, file-rss:0kB, shmem-rss:0kB, UID:0 pgtables:1320kB oom_score_adj:0

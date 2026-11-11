@@ -1,0 +1,13 @@
+[14:30:28] 결과 디렉터리: /mnt/c/thrash-guard/results/m1/20261111/stage11-650-file50-pin43-iops100/05-a650f50r4p43-5
+[14:30:28] VM 시작
+[14:30:39] VM 시작: run.qcow2, 메모리 1024 MiB, vCPU 2, I/O 상한 100 IOPS / 131072000 B/s
+[14:30:39] SSH 대기
+[14:32:14] 준비 완료: ssh -i /home/field/.ssh/tg_vm_ed25519 -p 2222 tg@127.0.0.1
+[14:32:58] file 모드 파일 준비 (50 MiB)
+tg-load: 파일 준비 완료 (50 MiB, /var/tmp/tg.dat)
+[14:32:59] mlock 메모리 43 MiB 고정
+[14:33:02] 기준 구간 15초
+[14:33:14] 부하 시작: anon 650 MiB (4 MiB/s), file 50 MiB, pin 43 MiB, 최대 1200초
+1043행 -> /mnt/c/thrash-guard/results/m1/20261111/stage11-650-file50-pin43-iops100/05-a650f50r4p43-5/samples.csv
+판정: oom_kill  (SSH 최장 무응답 96.1초, MemAvailable 최소 0.0 MiB, OOM kill 1건, 샘플 1023개)
+[14:37:26] 완료: /mnt/c/thrash-guard/results/m1/20261111/stage11-650-file50-pin43-iops100/05-a650f50r4p43-5

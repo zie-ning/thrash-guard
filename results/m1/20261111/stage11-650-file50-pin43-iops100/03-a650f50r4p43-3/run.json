@@ -1,0 +1,18 @@
+{
+  "id": "a650f50r4p43",
+  "scenario": "S1",
+  "load": {
+    "anon_mib": 650,
+    "rate_mib_s": 4,
+    "file_mib": 50,
+    "pin_mib": 43,
+    "pattern": "random"
+  },
+  "io_limit": {
+    "iops": 100,
+    "bytes_per_sec": 131072000
+  },
+  "max_sec": 1200,
+  "baseline_sec": 15,
+  "load_start_unix_ns": 1794373775292142276
+}
