@@ -47,7 +47,7 @@ jobs:
       - name: 정적 링크 빌드 (musl)
         run: make LIBC=musl
       - name: 바이너리 크기 기록
-        run: ls -l build/musl/tg-sampler
+        run: ls -l build/musl/tg-sampler build/musl/thrash-guard
 
   lint:
     runs-on: ubuntu-24.04
