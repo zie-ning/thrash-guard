@@ -10,7 +10,11 @@
 #
 # 사용법: lab/run.sh [옵션]
 #   --id NAME         실행 이름(결과 디렉터리 이름에 붙는다, 기본 run)
-#   --scenario S1     시나리오. 지금은 S1(swap 없음, 컨테이너 제한 없음)만 지원한다
+#   --scenario S1|S2  시나리오. S1: swap 없음, 컨테이너 제한 없음. S2: swap + 컨테이너 메모리 상한(D23)
+#   --cg-limit-mib N  S2 컨테이너 메모리 상한(기본 600). MemorySwapMax도 같은 값으로 둔다
+#   --swap-mib N      S2 swap 크기(기본 2048)
+#   --swappiness N    S2 vm.swappiness(기본 10)
+#   --min-ttl-ms N    MGLRU min_ttl_ms를 이 값으로 바꾼다(생략하면 커널 기본값 그대로)
 #   --anon-mib N      anon 목표 크기(기본 700)
 #   --rate-mib N      anon 증가 속도, MiB/초(기본 4)
 #   --file-mib N      file 모드 파일 크기(기본 400, 0이면 쓰지 않는다)
@@ -29,6 +33,10 @@ ANON_MIB=700
 RATE_MIB=4
 FILE_MIB=400
 PIN_MIB=0
+CG_LIMIT_MIB=600
+SWAP_MIB=2048
+SWAPPINESS=10
+MIN_TTL_MS=
 MAX_SEC=1500
 BASELINE_SEC=15
 OUT=""
@@ -42,6 +50,10 @@ while [ $# -gt 0 ]; do
         --rate-mib) RATE_MIB="$2"; shift 2 ;;
         --file-mib) FILE_MIB="$2"; shift 2 ;;
         --pin-mib) PIN_MIB="$2"; shift 2 ;;
+        --cg-limit-mib) CG_LIMIT_MIB="$2"; shift 2 ;;
+        --swap-mib) SWAP_MIB="$2"; shift 2 ;;
+        --swappiness) SWAPPINESS="$2"; shift 2 ;;
+        --min-ttl-ms) MIN_TTL_MS="$2"; shift 2 ;;
         --max-sec) MAX_SEC="$2"; shift 2 ;;
         --baseline-sec) BASELINE_SEC="$2"; shift 2 ;;
         --out) OUT="$2"; shift 2 ;;
@@ -49,8 +61,12 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-[ "$SCENARIO" = "S1" ] || { echo "지금은 S1만 지원한다 (S2, S3는 M1-5와 M2에서 추가)" >&2; exit 2; }
-for v in ANON_MIB RATE_MIB FILE_MIB PIN_MIB MAX_SEC BASELINE_SEC; do
+[ "$SCENARIO" = "S1" ] || [ "$SCENARIO" = "S2" ] || { echo "S1 또는 S2만 지원한다 (S3는 M2에서 추가)" >&2; exit 2; }
+if [ "$SCENARIO" = "S2" ] && { [ "$FILE_MIB" -gt 0 ] || [ "$PIN_MIB" -gt 0 ]; }; then
+    echo "S2는 file·pin 부하를 쓰지 않는다 (--file-mib 0 --pin-mib 0)" >&2; exit 2
+fi
+[ -z "$MIN_TTL_MS" ] || [[ "$MIN_TTL_MS" =~ ^[0-9]+$ ]] || { echo "--min-ttl-ms는 0 이상의 정수여야 한다" >&2; exit 2; }
+for v in ANON_MIB RATE_MIB FILE_MIB PIN_MIB CG_LIMIT_MIB SWAP_MIB SWAPPINESS MAX_SEC BASELINE_SEC; do
     [[ "${!v}" =~ ^[0-9]+$ ]] || { echo "$v 는 0 이상의 정수여야 한다: ${!v}" >&2; exit 2; }
 done
 [ "$ANON_MIB" -gt 0 ] || { echo "ANON_MIB는 1 이상이어야 한다" >&2; exit 2; }
@@ -87,6 +103,33 @@ sleep 1
 vm_ssh 'pgrep -x tg-sampler >/dev/null' \
     || { echo "tg-sampler가 시작되지 않았다" >&2; vm_ssh 'cat /tmp/sampler.out' >&2 || true; exit 1; }
 
+# 커널 조절값. 읽어 온 값을 결과 디렉터리에 남겨, 실제로 적용됐는지 나중에 확인할 수 있게 한다.
+if [ -n "$MIN_TTL_MS" ]; then
+    log "MGLRU min_ttl_ms = $MIN_TTL_MS"
+    vm_ssh "echo $MIN_TTL_MS | sudo tee /sys/kernel/mm/lru_gen/min_ttl_ms >/dev/null"
+fi
+
+if [ "$SCENARIO" = "S2" ]; then
+    log "S2 환경: swap ${SWAP_MIB} MiB, swappiness ${SWAPPINESS}, 컨테이너 상한 ${CG_LIMIT_MIB} MiB"
+    # swap 파일은 fallocate로 만든다. 쓰기 I/O가 I/O 상한에 걸려 오래 걸리는 일을 피한다.
+    vm_ssh "sudo swapoff -a; sudo rm -f /swapfile; sudo fallocate -l ${SWAP_MIB}M /swapfile && sudo chmod 600 /swapfile \
+            && sudo mkswap /swapfile >/dev/null && sudo swapon /swapfile && sudo sysctl -q vm.swappiness=$SWAPPINESS"
+    # 컨테이너 대신 systemd 슬라이스로 상한을 건다. 이름이 workload-*.slice이면 workload.slice의 하위가 된다.
+    vm_ssh "printf '[Slice]\nMemoryMax=${CG_LIMIT_MIB}M\nMemorySwapMax=${CG_LIMIT_MIB}M\n' \
+            | sudo tee /run/systemd/system/workload-container.slice >/dev/null && sudo systemctl daemon-reload \
+            && sudo systemctl start workload-container.slice"
+    vm_ssh "sudo systemd-run -q --unit=tg-canary --slice=workload-container.slice \
+            /tmp/tg-load canary --port $CANARY_PORT --work-kib 4096 --duration $((MAX_SEC + BASELINE_SEC + 120))"
+    sleep 2
+    vm_ssh 'systemctl is-active tg-canary >/dev/null' \
+        || { echo "카나리가 시작되지 않았다" >&2; vm_ssh 'sudo journalctl -u tg-canary --no-pager | tail' >&2 || true; exit 1; }
+    python3 "$TG_ROOT/lab/collect/canary_probe.py" --port "$CANARY_PORT" --out "$OUT/canary_probe.tsv" \
+        2>"$OUT/canary_probe.err" &
+    pids+=($!)
+fi
+vm_ssh 'echo "min_ttl_ms=$(cat /sys/kernel/mm/lru_gen/min_ttl_ms 2>/dev/null) lru_gen_enabled=$(cat /sys/kernel/mm/lru_gen/enabled 2>/dev/null) swappiness=$(cat /proc/sys/vm/swappiness) thp=$(cat /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null)"; swapon --show --noheadings; cat /sys/fs/cgroup/workload.slice/workload-container.slice/memory.max /sys/fs/cgroup/workload.slice/workload-container.slice/memory.swap.max 2>/dev/null' \
+    >"$OUT/kernel_knobs.txt" 2>&1 || true
+
 # 파일은 부하를 걸기 전에 만들어 둔다. 만드는 시간이 측정에 섞이지 않게 하기 위함이다.
 if [ "$FILE_MIB" -gt 0 ]; then
     log "file 모드 파일 준비 (${FILE_MIB} MiB)"
@@ -108,8 +151,14 @@ sleep "$BASELINE_SEC"
 
 LOAD_START_NS="$(date +%s%N)"
 log "부하 시작: anon ${ANON_MIB} MiB (${RATE_MIB} MiB/s), file ${FILE_MIB} MiB, pin ${PIN_MIB} MiB, 최대 ${MAX_SEC}초"
-vm_ssh "sudo nohup /tmp/tg-load anon --size-mib $ANON_MIB --rate-mib $RATE_MIB --duration $MAX_SEC \
-        >/tmp/tg-anon.out 2>&1 </dev/null &"
+if [ "$SCENARIO" = "S2" ]; then
+    vm_ssh "sudo systemd-run -q --unit=tg-anon --slice=workload-container.slice \
+            -p StandardOutput=file:/tmp/tg-anon.out -p StandardError=file:/tmp/tg-anon.out \
+            /tmp/tg-load anon --size-mib $ANON_MIB --rate-mib $RATE_MIB --duration $MAX_SEC"
+else
+    vm_ssh "sudo nohup /tmp/tg-load anon --size-mib $ANON_MIB --rate-mib $RATE_MIB --duration $MAX_SEC \
+            >/tmp/tg-anon.out 2>&1 </dev/null &"
+fi
 if [ "$FILE_MIB" -gt 0 ]; then
     vm_ssh "sudo nohup /tmp/tg-load file --path /var/tmp/tg.dat --size-mib $FILE_MIB --duration $MAX_SEC \
             >/tmp/tg-file.out 2>&1 </dev/null &"
@@ -122,6 +171,7 @@ vm_ssh 'pgrep -x tg-load >/dev/null' \
 # 실행 조건 기록. 판정 결과는 끝난 뒤 result.json에 합친다.
 RUN_ID="$ID" SCENARIO="$SCENARIO" ANON_MIB="$ANON_MIB" RATE_MIB="$RATE_MIB" FILE_MIB="$FILE_MIB" \
 PIN_MIB="$PIN_MIB" IO_IOPS="$VM_IOPS" IO_BPS="$VM_BPS" \
+CG_LIMIT_MIB="$CG_LIMIT_MIB" SWAP_MIB="$SWAP_MIB" SWAPPINESS="$SWAPPINESS" MIN_TTL_MS="$MIN_TTL_MS" \
 MAX_SEC="$MAX_SEC" BASELINE_SEC="$BASELINE_SEC" LOAD_START_NS="$LOAD_START_NS" \
 python3 - "$OUT/run.json" <<'EOF'
 import json, os, sys
@@ -131,6 +181,9 @@ json.dump({
     "load": {"anon_mib": int(e["ANON_MIB"]), "rate_mib_s": int(e["RATE_MIB"]),
              "file_mib": int(e["FILE_MIB"]), "pin_mib": int(e["PIN_MIB"]), "pattern": "random"},
     "io_limit": {"iops": int(e["IO_IOPS"]), "bytes_per_sec": int(e["IO_BPS"])},
+    "kernel": {"min_ttl_ms": int(e["MIN_TTL_MS"]) if e["MIN_TTL_MS"] else None},
+    "container": ({"limit_mib": int(e["CG_LIMIT_MIB"]), "swap_mib": int(e["SWAP_MIB"]),
+                   "swappiness": int(e["SWAPPINESS"])} if e["SCENARIO"] == "S2" else None),
     "max_sec": int(e["MAX_SEC"]), "baseline_sec": int(e["BASELINE_SEC"]),
     "load_start_unix_ns": int(e["LOAD_START_NS"]),
 }, open(sys.argv[1], "w"), indent=2)
@@ -141,13 +194,22 @@ deadline=$((SECONDS + MAX_SEC + 30))
 status=running
 while [ "$SECONDS" -lt "$deadline" ]; do
     sleep 5
-    status="$(python3 "$TG_ROOT/lab/analyze/verdict.py" "$OUT" --now-ns "$(date +%s%N)" --field verdict)"
+    if [ "$SCENARIO" = "S2" ]; then
+        status="$(python3 "$TG_ROOT/lab/analyze/s2_summary.py" "$OUT" --now-ns "$(date +%s%N)" --field verdict)"
+    else
+        status="$(python3 "$TG_ROOT/lab/analyze/verdict.py" "$OUT" --now-ns "$(date +%s%N)" --field verdict)"
+    fi
     [ "$status" = "running" ] || break
 done
 
 END_NS="$(date +%s%N)"
-python3 "$TG_ROOT/lab/analyze/verdict.py" "$OUT" --now-ns "$END_NS" --final >"$OUT/verdict.json"
-VERDICT="$(python3 "$TG_ROOT/lab/analyze/verdict.py" "$OUT" --now-ns "$END_NS" --final --field verdict)"
+if [ "$SCENARIO" = "S2" ]; then
+    JUDGE="$TG_ROOT/lab/analyze/s2_summary.py"
+else
+    JUDGE="$TG_ROOT/lab/analyze/verdict.py"
+fi
+python3 "$JUDGE" "$OUT" --now-ns "$END_NS" --final >"$OUT/verdict.json"
+VERDICT="$(python3 "$JUDGE" "$OUT" --now-ns "$END_NS" --final --field verdict)"
 
 # VM이 아직 응답하면(= livelock이 아니면) 부하 로그와 커널 OOM 기록을 가져온다.
 if [ "$VERDICT" != "livelock" ]; then
@@ -169,7 +231,8 @@ d = sys.argv[1]
 run = json.load(open(f"{d}/run.json"))
 res = json.load(open(f"{d}/verdict.json"))
 json.dump({**run, "result": res}, open(f"{d}/result.json", "w"), ensure_ascii=False, indent=2)
-print(f"판정: {res['verdict']}  (SSH 최장 무응답 {res['ssh_max_gap_s']}초, "
+extra = f", 카나리 최장 무응답 {res['canary_max_gap_s']}초" if "canary_max_gap_s" in res else ""
+print(f"판정: {res['verdict']}  (SSH 최장 무응답 {res['ssh_max_gap_s']}초{extra}, "
       f"MemAvailable 최소 {res['mem_avail_min_mib']} MiB, OOM kill {res['oom_kill_delta']}건, "
       f"샘플 {res['samples']}개)")
 EOF
