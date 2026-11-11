@@ -1,0 +1,13 @@
+{
+  "verdict": "normal",
+  "canary_max_gap_s": 15.7,
+  "canary_probes": 1051,
+  "canary_ok": 1020,
+  "ssh_max_gap_s": 11.6,
+  "mem_avail_min_mib": 21.3,
+  "cg_psi_full_ratio_in_gap": 0.531,
+  "cg_ev_max_delta": 1234,
+  "cg_ev_oom_kill_delta": 0,
+  "oom_kill_delta": 0,
+  "samples": 4245
+}

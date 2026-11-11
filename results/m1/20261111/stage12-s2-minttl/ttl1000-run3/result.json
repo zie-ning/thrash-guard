@@ -1,0 +1,39 @@
+{
+  "id": "s2-ttl1000-3",
+  "scenario": "S2",
+  "load": {
+    "anon_mib": 800,
+    "rate_mib_s": 4,
+    "file_mib": 0,
+    "pin_mib": 0,
+    "pattern": "random"
+  },
+  "io_limit": {
+    "iops": 100,
+    "bytes_per_sec": 131072000
+  },
+  "kernel": {
+    "min_ttl_ms": 1000
+  },
+  "container": {
+    "limit_mib": 600,
+    "swap_mib": 2048,
+    "swappiness": 10
+  },
+  "max_sec": 1000,
+  "baseline_sec": 15,
+  "load_start_unix_ns": 1794383347143935399,
+  "result": {
+    "verdict": "normal",
+    "canary_max_gap_s": 3.2,
+    "canary_probes": 1050,
+    "canary_ok": 1041,
+    "ssh_max_gap_s": 10.8,
+    "mem_avail_min_mib": 23.1,
+    "cg_psi_full_ratio_in_gap": 0.738,
+    "cg_ev_max_delta": 810,
+    "cg_ev_oom_kill_delta": 0,
+    "oom_kill_delta": 0,
+    "samples": 4244
+  }
+}
