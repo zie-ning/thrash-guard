@@ -26,7 +26,7 @@
 #include <stdint.h>
 
 #define TG_CFG_PATH_CAP 256        /* 경로 문자열 용량(NUL 포함) */
-#define TG_MAX_WINDOW_SAMPLES 1024 /* 지속 판단 고정 배열의 최대 칸 수 */
+#define TG_MAX_WINDOW_SAMPLES 256 /* 지속 판단 고정 배열의 최대 칸 수. 후보 32개 x 2배열이 mlock되므로 작게 둔다 */
 
 struct tg_config {
     /* 감시·종료 대상 구역. 이 cgroup의 memory.pressure를 감시하고 그 하위만 종료한다(D16) */

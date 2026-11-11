@@ -27,7 +27,7 @@ COMMON_SRC := src/common/procfs.c src/common/selfprot.c src/common/fmt.c
 SAMPLER_SRC := src/sampler/main.c
 # 데몬 모듈. main.c를 뺀 나머지는 테스트에도 함께 링크한다.
 DAEMON_LIB_SRC := src/daemon/config.c src/daemon/policy.c src/daemon/targets.c \
-                  src/daemon/scanner.c
+                  src/daemon/scanner.c src/daemon/judge.c
 DAEMON_SRC := src/daemon/main.c
 
 SAMPLER := $(BUILD)/tg-sampler
@@ -51,7 +51,7 @@ TEST_CC ?= cc
 TEST_CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined \
                -fno-sanitize-recover=all -DTG_FIXTURE_DIR='"tests/fixtures"'
 TESTS := $(TBUILD)/test_procfs $(TBUILD)/test_fmt $(TBUILD)/test_config \
-         $(TBUILD)/test_policy $(TBUILD)/test_targets
+         $(TBUILD)/test_policy $(TBUILD)/test_targets $(TBUILD)/test_judge
 
 $(TBUILD)/test_%: tests/test_%.c $(COMMON_SRC) $(DAEMON_LIB_SRC) tests/tg_test.h \
                   $(wildcard src/common/*.h src/daemon/*.h)

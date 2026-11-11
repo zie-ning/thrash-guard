@@ -227,9 +227,15 @@ static void test_validate(void)
     TG_CHECK(tg_config_validate(&c, &e) == -EINVAL);
     c.sample_interval_ms = 250; /* 1200칸 */
     TG_CHECK(tg_config_validate(&c, &e) == -EINVAL);
-    c.sample_interval_ms = 500; /* 600칸 */
+    c.sample_interval_ms = 1000; /* 300칸: 상한 256 초과 */
+    TG_CHECK(tg_config_validate(&c, &e) == -EINVAL);
+    c.sustain_sec = 100;
+    c.sample_interval_ms = 500; /* 200칸 */
     TG_CHECK(tg_config_validate(&c, &e) == 0);
-    TG_CHECK_EQ_U64(tg_config_window_samples(&c), 600);
+    TG_CHECK_EQ_U64(tg_config_window_samples(&c), 200);
+    c.sustain_sec = 64;
+    c.sample_interval_ms = 250; /* 256칸: 경계 */
+    TG_CHECK(tg_config_validate(&c, &e) == 0);
 }
 
 static void test_load(void)
