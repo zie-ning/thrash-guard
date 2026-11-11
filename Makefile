@@ -14,7 +14,7 @@ else ifneq ($(LIBC),glibc)
 $(error LIBC는 glibc 또는 musl 이어야 한다: $(LIBC))
 endif
 
-CSTD   := -std=c11 -D_GNU_SOURCE
+CSTD   := -std=c11 -D_GNU_SOURCE -pthread
 WARN   := -Wall -Wextra -Wpedantic -Wshadow -Wformat=2 -Wstrict-prototypes \
           -Wmissing-prototypes -Wcast-align -Wpointer-arith -Werror
 CFLAGS ?= -O2 -g
@@ -26,7 +26,8 @@ TBUILD := build/test
 COMMON_SRC := src/common/procfs.c src/common/selfprot.c src/common/fmt.c
 SAMPLER_SRC := src/sampler/main.c
 # 데몬 모듈. main.c를 뺀 나머지는 테스트에도 함께 링크한다.
-DAEMON_LIB_SRC := src/daemon/config.c
+DAEMON_LIB_SRC := src/daemon/config.c src/daemon/policy.c src/daemon/targets.c \
+                  src/daemon/scanner.c
 DAEMON_SRC := src/daemon/main.c
 
 SAMPLER := $(BUILD)/tg-sampler
@@ -49,7 +50,8 @@ $(DAEMON): $(COMMON_SRC) $(DAEMON_LIB_SRC) $(DAEMON_SRC) $(wildcard src/common/*
 TEST_CC ?= cc
 TEST_CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined \
                -fno-sanitize-recover=all -DTG_FIXTURE_DIR='"tests/fixtures"'
-TESTS := $(TBUILD)/test_procfs $(TBUILD)/test_fmt $(TBUILD)/test_config
+TESTS := $(TBUILD)/test_procfs $(TBUILD)/test_fmt $(TBUILD)/test_config \
+         $(TBUILD)/test_policy $(TBUILD)/test_targets
 
 $(TBUILD)/test_%: tests/test_%.c $(COMMON_SRC) $(DAEMON_LIB_SRC) tests/tg_test.h \
                   $(wildcard src/common/*.h src/daemon/*.h)
