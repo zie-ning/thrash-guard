@@ -14,6 +14,7 @@
 #   --anon-mib N      anon 목표 크기(기본 700)
 #   --rate-mib N      anon 증가 속도, MiB/초(기본 4)
 #   --file-mib N      file 모드 파일 크기(기본 400, 0이면 쓰지 않는다)
+#   --pin-mib N       mlock으로 고정해 둘 메모리 크기(기본 0, 길벗의 회수 불가 메모리는 약 43)
 #   --max-sec N       부하를 거는 최대 시간(기본 1500)
 #   --baseline-sec N  부하 전 기준 구간(기본 15)
 #   --out DIR         결과 디렉터리(기본 results/m1/<날짜>/<id>-<시각>)
@@ -27,6 +28,7 @@ SCENARIO=S1
 ANON_MIB=700
 RATE_MIB=4
 FILE_MIB=400
+PIN_MIB=0
 MAX_SEC=1500
 BASELINE_SEC=15
 OUT=""
@@ -39,6 +41,7 @@ while [ $# -gt 0 ]; do
         --anon-mib) ANON_MIB="$2"; shift 2 ;;
         --rate-mib) RATE_MIB="$2"; shift 2 ;;
         --file-mib) FILE_MIB="$2"; shift 2 ;;
+        --pin-mib) PIN_MIB="$2"; shift 2 ;;
         --max-sec) MAX_SEC="$2"; shift 2 ;;
         --baseline-sec) BASELINE_SEC="$2"; shift 2 ;;
         --out) OUT="$2"; shift 2 ;;
@@ -47,7 +50,7 @@ while [ $# -gt 0 ]; do
 done
 
 [ "$SCENARIO" = "S1" ] || { echo "지금은 S1만 지원한다 (S2, S3는 M1-5와 M2에서 추가)" >&2; exit 2; }
-for v in ANON_MIB RATE_MIB FILE_MIB MAX_SEC BASELINE_SEC; do
+for v in ANON_MIB RATE_MIB FILE_MIB PIN_MIB MAX_SEC BASELINE_SEC; do
     [[ "${!v}" =~ ^[0-9]+$ ]] || { echo "$v 는 0 이상의 정수여야 한다: ${!v}" >&2; exit 2; }
 done
 [ "$ANON_MIB" -gt 0 ] || { echo "ANON_MIB는 1 이상이어야 한다" >&2; exit 2; }
@@ -90,11 +93,21 @@ if [ "$FILE_MIB" -gt 0 ]; then
     vm_ssh "sudo /tmp/tg-load file --path /var/tmp/tg.dat --size-mib $FILE_MIB --prepare-only"
 fi
 
+# 회수 불가 메모리는 기준 구간 전에 고정해, 부하가 아니라 "원래 있던 메모리"로 보이게 한다.
+if [ "$PIN_MIB" -gt 0 ]; then
+    log "mlock 메모리 ${PIN_MIB} MiB 고정"
+    vm_ssh "sudo nohup /tmp/tg-load pin --size-mib $PIN_MIB --duration $((MAX_SEC + BASELINE_SEC + 120)) \
+            >/tmp/tg-pin.out 2>&1 </dev/null &"
+    sleep 2
+    vm_ssh 'pgrep -f "^/tmp/tg-load pin" >/dev/null' \
+        || { echo "pin 모드가 시작되지 않았다" >&2; vm_ssh 'cat /tmp/tg-pin.out' >&2 || true; exit 1; }
+fi
+
 log "기준 구간 ${BASELINE_SEC}초"
 sleep "$BASELINE_SEC"
 
 LOAD_START_NS="$(date +%s%N)"
-log "부하 시작: anon ${ANON_MIB} MiB (${RATE_MIB} MiB/s), file ${FILE_MIB} MiB, 최대 ${MAX_SEC}초"
+log "부하 시작: anon ${ANON_MIB} MiB (${RATE_MIB} MiB/s), file ${FILE_MIB} MiB, pin ${PIN_MIB} MiB, 최대 ${MAX_SEC}초"
 vm_ssh "sudo nohup /tmp/tg-load anon --size-mib $ANON_MIB --rate-mib $RATE_MIB --duration $MAX_SEC \
         >/tmp/tg-anon.out 2>&1 </dev/null &"
 if [ "$FILE_MIB" -gt 0 ]; then
@@ -108,6 +121,7 @@ vm_ssh 'pgrep -x tg-load >/dev/null' \
 
 # 실행 조건 기록. 판정 결과는 끝난 뒤 result.json에 합친다.
 RUN_ID="$ID" SCENARIO="$SCENARIO" ANON_MIB="$ANON_MIB" RATE_MIB="$RATE_MIB" FILE_MIB="$FILE_MIB" \
+PIN_MIB="$PIN_MIB" IO_IOPS="$VM_IOPS" IO_BPS="$VM_BPS" \
 MAX_SEC="$MAX_SEC" BASELINE_SEC="$BASELINE_SEC" LOAD_START_NS="$LOAD_START_NS" \
 python3 - "$OUT/run.json" <<'EOF'
 import json, os, sys
@@ -115,7 +129,8 @@ e = os.environ
 json.dump({
     "id": e["RUN_ID"], "scenario": e["SCENARIO"],
     "load": {"anon_mib": int(e["ANON_MIB"]), "rate_mib_s": int(e["RATE_MIB"]),
-             "file_mib": int(e["FILE_MIB"]), "pattern": "random"},
+             "file_mib": int(e["FILE_MIB"]), "pin_mib": int(e["PIN_MIB"]), "pattern": "random"},
+    "io_limit": {"iops": int(e["IO_IOPS"]), "bytes_per_sec": int(e["IO_BPS"])},
     "max_sec": int(e["MAX_SEC"]), "baseline_sec": int(e["BASELINE_SEC"]),
     "load_start_unix_ns": int(e["LOAD_START_NS"]),
 }, open(sys.argv[1], "w"), indent=2)
@@ -137,7 +152,7 @@ VERDICT="$(python3 "$TG_ROOT/lab/analyze/verdict.py" "$OUT" --now-ns "$END_NS" -
 # VM이 아직 응답하면(= livelock이 아니면) 부하 로그와 커널 OOM 기록을 가져온다.
 if [ "$VERDICT" != "livelock" ]; then
     timeout 30 ssh "${SSH_OPTS[@]}" "$VM_USER@127.0.0.1" \
-        'tail -n 30 /tmp/tg-anon.out /tmp/tg-file.out 2>/dev/null; sudo dmesg | grep -i -E "oom|killed process" || true' \
+        'tail -n 30 /tmp/tg-anon.out /tmp/tg-file.out /tmp/tg-pin.out 2>/dev/null; sudo dmesg | grep -i -E "oom|killed process" || true' \
         >"$OUT/load.out" 2>&1 || echo "VM이 응답하지 않아 부하 로그를 가져오지 못했다" >"$OUT/load.out"
 fi
 

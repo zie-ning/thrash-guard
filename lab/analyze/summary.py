@@ -27,20 +27,22 @@ def collect(root):
             "anon": load.get("anon_mib"),
             "file": load.get("file_mib"),
             "rate": load.get("rate_mib_s"),
+            "pin": load.get("pin_mib", 0),
+            "iops": (r.get("io_limit") or {}).get("iops"),
             "verdict": res.get("verdict"),
             "gap": res.get("ssh_max_gap_s"),
             "mem": res.get("mem_avail_min_mib"),
             "oom": res.get("oom_kill_delta"),
         })
-    rows.sort(key=lambda x: (x["anon"] or 0, x["file"] or 0, x["rate"] or 0, x["dir"]))
+    rows.sort(key=lambda x: (x["anon"] or 0, x["file"] or 0, x["pin"] or 0, x["iops"] or 0, x["rate"] or 0, x["dir"]))
     return rows
 
 
 def render(rows):
-    lines = ["| anon | file | 속도 | 판정 | SSH 최장 무응답(초) | MemAvailable 최소(MiB) | OOM kill | 실행 |",
-             "|---|---|---|---|---|---|---|---|"]
+    lines = ["| anon | file | pin | IOPS | 속도 | 판정 | SSH 최장 무응답(초) | MemAvailable 최소(MiB) | OOM kill | 실행 |",
+             "|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
-        lines.append(f"| {r['anon']} | {r['file']} | {r['rate']} | {r['verdict']} | {r['gap']} | "
+        lines.append(f"| {r['anon']} | {r['file']} | {r['pin']} | {r['iops']} | {r['rate']} | {r['verdict']} | {r['gap']} | "
                      f"{r['mem']} | {r['oom']} | {r['dir']} |")
     counts = {}
     for r in rows:

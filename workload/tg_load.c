@@ -6,6 +6,8 @@
  *
  *   anon    익명 메모리를 일정 속도로 늘려 목표 크기까지 키우고, 전체를 무작위로 계속 쓴다.
  *   file    파일을 mmap해 전체를 무작위로 계속 읽는다. 곧 다시 필요한 파일 페이지를 만든다.
+ *   pin     메모리를 잡아 mlock으로 고정하고 가만히 있는다. 커널이 회수할 수 없는 메모리를 모사한다
+ *           (길벗 장애 때 unevictable 약 43 MiB, multipathd 등이 mlock한 것으로 추정).
  *   canary  TCP로 요청에 응답하고 처리량·처리 시간을 기록한다. 메모리 보호(mlock)는 하지 않아
  *           일반 앱처럼 스래싱 피해를 그대로 받는다.
  *
@@ -34,11 +36,11 @@
 #define MIB (1024UL * 1024UL)
 #define BATCH 256 /* 시간을 확인하는 단위(접근 횟수) */
 
-enum mode { MODE_NONE, MODE_ANON, MODE_FILE, MODE_CANARY };
+enum mode { MODE_NONE, MODE_ANON, MODE_FILE, MODE_CANARY, MODE_PIN };
 
 struct opts {
     enum mode mode;
-    unsigned long size_mib;  /* anon: 목표 크기, file: 파일 크기 */
+    unsigned long size_mib;  /* anon: 목표 크기, file: 파일 크기, pin: 고정할 크기 */
     unsigned long rate_mib;  /* anon: 초당 증가량. 0이면 즉시 */
     unsigned long duration;  /* 초. 0이면 신호가 올 때까지 */
     unsigned long port;      /* canary */
@@ -59,11 +61,13 @@ static void on_signal(int sig)
 static void usage(void)
 {
     fprintf(stderr,
-            "사용법: tg-load <anon|file|canary> [옵션]\n"
+            "사용법: tg-load <anon|file|canary|pin> [옵션]\n"
             "  anon   --size-mib N [--rate-mib N] [--duration S]\n"
             "         목표 크기까지 초당 rate-mib씩 늘리며 무작위로 쓴다(rate 0이면 즉시)\n"
             "  file   --path P --size-mib N [--duration S] [--prepare-only]\n"
             "         파일을 만들고(이미 크기가 맞으면 재사용) 무작위로 읽는다\n"
+            "  pin    --size-mib N [--duration S]\n"
+            "         메모리 N MiB를 잡아 mlock으로 고정하고 가만히 있는다(root 또는 CAP_IPC_LOCK 필요)\n"
             "  canary --port N [--work-kib N] [--duration S]\n"
             "         연결마다 \"ok <번호>\"를 한 줄 답한다\n"
             "  공통   --seed N  난수 시드(기본 1)\n");
@@ -119,6 +123,8 @@ static int parse_args(int argc, char **argv, struct opts *o)
         o->mode = MODE_FILE;
     else if (strcmp(argv[1], "canary") == 0)
         o->mode = MODE_CANARY;
+    else if (strcmp(argv[1], "pin") == 0)
+        o->mode = MODE_PIN;
     else
         return -1;
 
@@ -160,6 +166,10 @@ static int parse_args(int argc, char **argv, struct opts *o)
         o->seed = 1; /* xorshift는 0 상태가 고정점이다 */
     if (o->mode == MODE_ANON && o->size_mib == 0) {
         fprintf(stderr, "anon: --size-mib가 필요하다\n");
+        return -2;
+    }
+    if (o->mode == MODE_PIN && o->size_mib == 0) {
+        fprintf(stderr, "pin: --size-mib가 필요하다\n");
         return -2;
     }
     if (o->mode == MODE_FILE && (o->path == NULL || o->size_mib == 0)) {
@@ -379,6 +389,47 @@ static int run_file(const struct opts *o)
     return 0;
 }
 
+/* 메모리를 잡아 모든 페이지를 채우고 mlock으로 고정한다. 그 뒤로는 1초마다 상태만 출력한다. */
+static int run_pin(const struct opts *o)
+{
+    size_t size = (size_t)o->size_mib * MIB;
+    size_t i;
+    struct stats st;
+    uint8_t *mem;
+
+    mem = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (mem == MAP_FAILED) {
+        perror("mmap");
+        return 1;
+    }
+    for (i = 0; i < size; i += PAGE_SZ)
+        mem[i] = 1;
+    if (mlock(mem, size) != 0) {
+        perror("mlock");
+        munmap(mem, size);
+        return 1;
+    }
+    stats_init(&st);
+
+    while (!stop_requested) {
+        int64_t now;
+        int64_t elapsed;
+        int64_t since;
+
+        usleep(100000);
+        now = now_ms();
+        if (stats_due(&st, now, &elapsed, &since)) {
+            printf("tg-load mode=pin t_s=%" PRId64 " pinned_mib=%lu\n", since / 1000, o->size_mib);
+            fflush(stdout);
+        }
+        if (duration_over(o, &st, now))
+            break;
+    }
+    munlock(mem, size);
+    munmap(mem, size);
+    return 0;
+}
+
 static int run_canary(const struct opts *o)
 {
     size_t work = (size_t)o->work_kib * 1024UL;
@@ -490,6 +541,8 @@ int main(int argc, char **argv)
         return run_file(&o);
     case MODE_CANARY:
         return run_canary(&o);
+    case MODE_PIN:
+        return run_pin(&o);
     default:
         usage();
         return 2;
