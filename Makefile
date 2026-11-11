@@ -27,13 +27,13 @@ COMMON_SRC := src/common/procfs.c src/common/selfprot.c src/common/fmt.c
 SAMPLER_SRC := src/sampler/main.c
 # 데몬 모듈. main.c를 뺀 나머지는 테스트에도 함께 링크한다.
 DAEMON_LIB_SRC := src/daemon/config.c src/daemon/policy.c src/daemon/targets.c \
-                  src/daemon/scanner.c src/daemon/judge.c
+                  src/daemon/scanner.c src/daemon/judge.c src/daemon/log.c
 DAEMON_SRC := src/daemon/main.c
 
 SAMPLER := $(BUILD)/tg-sampler
 DAEMON  := $(BUILD)/thrash-guard
 
-.PHONY: all test lint clean
+.PHONY: all test test-tsan lint clean
 
 all: $(SAMPLER) $(DAEMON)
 
@@ -51,7 +51,7 @@ TEST_CC ?= cc
 TEST_CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined \
                -fno-sanitize-recover=all -DTG_FIXTURE_DIR='"tests/fixtures"'
 TESTS := $(TBUILD)/test_procfs $(TBUILD)/test_fmt $(TBUILD)/test_config \
-         $(TBUILD)/test_policy $(TBUILD)/test_targets $(TBUILD)/test_judge
+         $(TBUILD)/test_policy $(TBUILD)/test_targets $(TBUILD)/test_judge $(TBUILD)/test_log
 
 $(TBUILD)/test_%: tests/test_%.c $(COMMON_SRC) $(DAEMON_LIB_SRC) tests/tg_test.h \
                   $(wildcard src/common/*.h src/daemon/*.h)
@@ -60,6 +60,23 @@ $(TBUILD)/test_%: tests/test_%.c $(COMMON_SRC) $(DAEMON_LIB_SRC) tests/tg_test.h
 
 test: $(TESTS)
 	@set -e; for t in $(TESTS); do echo "== $$t"; ./$$t; done
+
+# 스레드를 쓰는 모듈(로그 링버퍼, 스캔 스레드)의 데이터 경쟁 검사. ThreadSanitizer는
+# AddressSanitizer와 함께 쓸 수 없어 별도 빌드로 돌린다.
+TSBUILD := build/tsan
+TSAN_TESTS := $(TSBUILD)/test_log $(TSBUILD)/test_targets
+
+$(TSBUILD)/test_%: tests/test_%.c $(COMMON_SRC) $(DAEMON_LIB_SRC) tests/tg_test.h \
+                   $(wildcard src/common/*.h src/daemon/*.h)
+	@mkdir -p $(@D)
+	$(TEST_CC) $(CSTD) $(WARN) -O1 -g -fno-omit-frame-pointer -fsanitize=thread \
+	    -fno-sanitize-recover=all -DTG_FIXTURE_DIR='"tests/fixtures"' $(INC) -Itests \
+	    -o $@ $< $(COMMON_SRC) $(DAEMON_LIB_SRC)
+
+# 최신 커널의 주소 무작위화(vm.mmap_rnd_bits)가 ThreadSanitizer와 충돌하는 환경이 있어,
+# 시스템 설정은 건드리지 않고 프로세스 단위로 무작위화를 끄고(setarch -R) 실행한다.
+test-tsan: $(TSAN_TESTS)
+	@set -e; for t in $(TSAN_TESTS); do echo "== $$t"; setarch $$(uname -m) -R ./$$t; done
 
 lint:
 	cppcheck --enable=warning,performance,portability --std=c11 --error-exitcode=1 \
