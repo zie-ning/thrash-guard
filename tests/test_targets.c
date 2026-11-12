@@ -187,7 +187,13 @@ static void test_recreated_cgroup_is_new_entry(void)
     tg_targets_init(&y);
     TG_CHECK(tg_targets_rebuild(&x, NULL, root, 1, true) == 0);
     e = tg_targets_find(&x, "a");
-    TG_CHECK(e != NULL && e->first_seen_ns == 0);
+    TG_CHECK(e != NULL);
+    if (e == NULL) {
+        tg_targets_release(&x, NULL);
+        rm_cg("a");
+        return;
+    }
+    TG_CHECK_EQ_U64(e->first_seen_ns, 0);
     old_fd = e->current_fd;
 
     /* 같은 이름으로 다시 만들어진 cgroup: memory.current가 다른 파일이 되었다 */
