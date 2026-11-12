@@ -564,6 +564,42 @@ static void test_start_fifo_without_reader(void)
     unlink(errpath);
 }
 
+/* 독자가 있는 FIFO도 일반 파일이 아니므로 표준 오류로 대체한다 */
+static void test_start_fifo_with_reader(void)
+{
+    struct tg_log l;
+    struct tg_config cfg;
+    char path[128];
+    char errpath[128];
+    int saved;
+    int tmp;
+    int rd;
+
+    tg_config_defaults(&cfg);
+    snprintf(path, sizeof(path), "%s/fifo2", tmpdir);
+    TG_CHECK(mkfifo(path, 0600) == 0);
+    snprintf(cfg.log_path, sizeof(cfg.log_path), "%s", path);
+    rd = open(path, O_RDONLY | O_NONBLOCK);
+    TG_CHECK(rd >= 0);
+
+    snprintf(errpath, sizeof(errpath), "%s/stderr_fifo2.txt", tmpdir);
+    tmp = open(errpath, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    saved = dup(STDERR_FILENO);
+    TG_CHECK(tmp >= 0 && saved >= 0);
+    dup2(tmp, STDERR_FILENO);
+    close(tmp);
+
+    TG_CHECK(tg_log_start(&l, &cfg) == 0);
+    TG_CHECK(l.fell_back);
+    tg_log_stop(&l);
+
+    dup2(saved, STDERR_FILENO);
+    close(saved);
+    close(rd);
+    unlink(path);
+    unlink(errpath);
+}
+
 static void test_stop_idempotent(void)
 {
     struct tg_log l;
@@ -602,6 +638,7 @@ int main(void)
     TG_RUN(test_start_file);
     TG_RUN(test_start_fallback);
     TG_RUN(test_start_fifo_without_reader);
+    TG_RUN(test_start_fifo_with_reader);
     TG_RUN(test_stop_idempotent);
 
     rmdir(tmpdir);

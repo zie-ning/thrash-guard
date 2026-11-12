@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/eventfd.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -324,11 +325,20 @@ int tg_log_start(struct tg_log *l, const struct tg_config *cfg)
             open_errno = errno;
             fd = STDERR_FILENO; /* 로그 때문에 보호 기능이 꺼지지 않게 표준 오류로 대체한다 */
         } else {
-            int fl = fcntl(fd, F_GETFL);
+            struct stat st;
 
-            if (fl >= 0)
-                fcntl(fd, F_SETFL, fl & ~O_NONBLOCK);
-            owned = fd;
+            /* 일반 파일이 아니면(FIFO 등) 느린 독자에게 기록 스레드가 묶이므로 쓰지 않는다 */
+            if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) {
+                open_errno = EINVAL;
+                close(fd);
+                fd = STDERR_FILENO;
+            } else {
+                int fl = fcntl(fd, F_GETFL);
+
+                if (fl >= 0)
+                    fcntl(fd, F_SETFL, fl & ~O_NONBLOCK);
+                owned = fd;
+            }
         }
     }
 

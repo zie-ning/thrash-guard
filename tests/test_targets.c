@@ -187,6 +187,30 @@ static void test_overflow(void)
     TG_CHECK_EQ_U64(x.n, TG_MAX_TARGETS);
     TG_CHECK_EQ_U64(x.skipped, 2);
 
+    /* 새 후보가 늘어도 기존 32개는 밀려나지 않는다 */
+    {
+        struct tg_targets y;
+        char kept[TG_MAX_TARGETS][16];
+
+        for (uint32_t i = 0; i < x.n; i++)
+            snprintf(kept[i], sizeof(kept[i]), "%s", x.t[i].name);
+        for (int i = 0; i < 3; i++) {
+            snprintf(name, sizeof(name), "new%d", i);
+            mk_cg(name, true, true);
+        }
+        tg_targets_init(&y);
+        TG_CHECK(tg_targets_rebuild(&y, &x, root, 2, false) == 0);
+        TG_CHECK_EQ_U64(y.n, TG_MAX_TARGETS);
+        TG_CHECK_EQ_U64(y.skipped, 5);
+        for (uint32_t i = 0; i < TG_MAX_TARGETS; i++)
+            TG_CHECK(tg_targets_find(&y, kept[i]) != NULL);
+        tg_targets_release(&y, &x);
+        for (int i = 0; i < 3; i++) {
+            snprintf(name, sizeof(name), "new%d", i);
+            rm_cg(name);
+        }
+    }
+
     tg_targets_release(&x, NULL);
     for (int i = 0; i < 34; i++) {
         snprintf(name, sizeof(name), "c%02d", i);

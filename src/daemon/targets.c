@@ -74,8 +74,9 @@ static int open_in_dir(int dfd, const char *name, size_t nlen, const char *file)
     return openat(dfd, path, O_RDONLY | O_CLOEXEC);
 }
 
+/* 1회차: 이미 표에 있던 항목만 옮긴다. 2회차: 새 항목만 더한다. */
 static void add_entry(struct tg_targets *next, const struct tg_targets *cur, int dfd,
-                      const char *name, size_t nlen, uint64_t now_ns, bool initial)
+                      const char *name, size_t nlen, uint64_t now_ns, bool initial, bool second)
 {
     const struct tg_target *old;
     struct tg_target *e;
@@ -89,6 +90,8 @@ static void add_entry(struct tg_targets *next, const struct tg_targets *cur, int
 
     old = tg_targets_find(cur, name);
     if (old != NULL) {
+        if (second)
+            return;
         if (next->n >= TG_MAX_TARGETS) {
             next->skipped++;
             return;
@@ -96,6 +99,8 @@ static void add_entry(struct tg_targets *next, const struct tg_targets *cur, int
         next->t[next->n++] = *old;
         return;
     }
+    if (!second)
+        return;
 
     pfd = open_in_dir(dfd, name, nlen, "memory.pressure");
     if (pfd < 0)
@@ -119,18 +124,15 @@ static void add_entry(struct tg_targets *next, const struct tg_targets *cur, int
     e->first_seen_ns = initial ? 0 : now_ns;
 }
 
-int tg_targets_rebuild(struct tg_targets *next, const struct tg_targets *cur, const char *parent,
-                       uint64_t now_ns, bool initial)
+/* 디렉터리를 한 번 훑는다. */
+static int scan_pass(struct tg_targets *next, const struct tg_targets *cur, int dfd,
+                     uint64_t now_ns, bool initial, bool second)
 {
     char buf[4096];
-    int dfd;
     int rc = 0;
     bool done = false;
 
-    tg_targets_release(next, cur);
-
-    dfd = open(parent, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-    if (dfd < 0)
+    if (lseek(dfd, 0, SEEK_SET) < 0)
         return -errno;
 
     while (!done) {
@@ -162,10 +164,32 @@ int tg_targets_rebuild(struct tg_targets *next, const struct tg_targets *cur, co
             }
             add_entry(next, cur, dfd, buf + off + DIRENT_NAME_OFF,
                       strnlen(buf + off + DIRENT_NAME_OFF, (size_t)reclen - DIRENT_NAME_OFF),
-                      now_ns, initial);
+                      now_ns, initial, second);
             off += reclen;
         }
     }
+    return rc;
+}
+
+/*
+ * 표가 가득 차도 기존 항목이 밀려나지 않도록 두 번 훑는다.
+ * 1회차에 기존 항목을 먼저 옮기고, 2회차에 새 항목을 남는 자리에 더한다.
+ */
+int tg_targets_rebuild(struct tg_targets *next, const struct tg_targets *cur, const char *parent,
+                       uint64_t now_ns, bool initial)
+{
+    int dfd;
+    int rc;
+
+    tg_targets_release(next, cur);
+
+    dfd = open(parent, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (dfd < 0)
+        return -errno;
+
+    rc = scan_pass(next, cur, dfd, now_ns, initial, false);
+    if (rc == 0)
+        rc = scan_pass(next, cur, dfd, now_ns, initial, true);
     close(dfd);
 
     if (rc != 0)
