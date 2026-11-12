@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 
@@ -37,7 +38,7 @@ static bool live_in(const struct tg_targets *keep, const struct tg_target *e)
     if (keep == NULL)
         return false;
     for (uint32_t i = 0; i < keep->n; i++) {
-        if (keep->t[i].pressure_fd == e->pressure_fd && keep->t[i].stat_fd == e->stat_fd &&
+        if (keep->t[i].pressure_fd == e->pressure_fd && keep->t[i].current_fd == e->current_fd &&
             strcmp(keep->t[i].name, e->name) == 0)
             return true;
     }
@@ -53,10 +54,10 @@ void tg_targets_release(struct tg_targets *t, const struct tg_targets *keep)
             continue;
         if (e->pressure_fd >= 0)
             close(e->pressure_fd);
-        if (e->stat_fd >= 0)
-            close(e->stat_fd);
+        if (e->current_fd >= 0)
+            close(e->current_fd);
         e->pressure_fd = -1;
-        e->stat_fd = -1;
+        e->current_fd = -1;
     }
     t->n = 0;
     t->skipped = 0;
@@ -75,6 +76,23 @@ static int open_in_dir(int dfd, const char *name, size_t nlen, const char *file)
 }
 
 /* 1회차: 이미 표에 있던 항목만 옮긴다. 2회차: 새 항목만 더한다. */
+/* 이름으로 다시 찾은 cgroup의 memory.current가 표에 보관한 fd와 같은 파일인가 */
+static bool same_cgroup(int dfd, const char *name, size_t nlen, const struct tg_target *old)
+{
+    char path[TG_TARGET_NAME_CAP + 24];
+    struct stat a;
+    struct stat b;
+    size_t flen = strlen("/memory.current");
+
+    memcpy(path, name, nlen);
+    memcpy(path + nlen, "/memory.current", flen + 1);
+    if (fstatat(dfd, path, &a, AT_SYMLINK_NOFOLLOW) != 0)
+        return false;
+    if (fstat(old->current_fd, &b) != 0)
+        return false;
+    return a.st_dev == b.st_dev && a.st_ino == b.st_ino;
+}
+
 static void add_entry(struct tg_targets *next, const struct tg_targets *cur, int dfd,
                       const char *name, size_t nlen, uint64_t now_ns, bool initial, bool second)
 {
@@ -89,6 +107,10 @@ static void add_entry(struct tg_targets *next, const struct tg_targets *cur, int
         return;
 
     old = tg_targets_find(cur, name);
+    if (old != NULL && !same_cgroup(dfd, name, nlen, old)) {
+        /* 같은 이름으로 다시 만들어진 cgroup이다. 옛 fd와 발견 시각을 버리고 새 항목으로 다룬다 */
+        old = NULL;
+    }
     if (old != NULL) {
         if (second)
             return;
@@ -110,7 +132,7 @@ static void add_entry(struct tg_targets *next, const struct tg_targets *cur, int
         next->skipped++;
         return;
     }
-    sfd = open_in_dir(dfd, name, nlen, "memory.stat");
+    sfd = open_in_dir(dfd, name, nlen, "memory.current");
     if (sfd < 0) {
         close(pfd);
         return;
@@ -120,7 +142,7 @@ static void add_entry(struct tg_targets *next, const struct tg_targets *cur, int
     memcpy(e->name, name, nlen);
     e->name[nlen] = '\0';
     e->pressure_fd = pfd;
-    e->stat_fd = sfd;
+    e->current_fd = sfd;
     e->first_seen_ns = initial ? 0 : now_ns;
 }
 

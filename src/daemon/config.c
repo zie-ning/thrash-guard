@@ -21,9 +21,12 @@ void tg_config_defaults(struct tg_config *cfg)
     strcpy(cfg->target_parent, "/sys/fs/cgroup/workload.slice");
     cfg->trigger_stall_us = 150000;
     cfg->trigger_window_us = 1000000;
-    cfg->full_pct = 10;
+    cfg->full_pct = 40;
     cfg->sustain_sec = 10;
     cfg->sample_interval_ms = 250;
+    cfg->mem_avail_pct = 10;
+    cfg->min_size_pct = 10;
+    cfg->min_growth_pct = 1;
     cfg->startup_grace_sec = 30;
     cfg->cooldown_sec = 60;
     cfg->max_kills_per_hour = 3;
@@ -62,6 +65,9 @@ static const struct field fields[] = {
     F_U32(full_pct, 1, 100),
     F_U32(sustain_sec, 1, 300),
     F_U32(sample_interval_ms, 50, 1000),
+    F_U32(mem_avail_pct, 1, 100),
+    F_U32(min_size_pct, 1, 100),
+    F_U32(min_growth_pct, 1, 100),
     F_U32(startup_grace_sec, 0, 3600),
     F_U32(cooldown_sec, 0, 86400),
     F_U32(max_kills_per_hour, 1, 100),

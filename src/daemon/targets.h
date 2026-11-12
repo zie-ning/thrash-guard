@@ -1,7 +1,7 @@
 /*
  * targets.h - 종료 후보 cgroup 표
  *
- * target_parent의 직계 자식 디렉터리 중 memory.pressure와 memory.stat를 열 수 있는 것을
+ * target_parent의 직계 자식 디렉터리 중 memory.pressure와 memory.current를 열 수 있는 것을
  * 후보로 삼아 고정 크기 표에 담는다. 항목마다 두 파일의 fd를 열어 둔 채 보관해서
  * 판단 루프가 경로 탐색 없이 pread로 읽을 수 있게 한다.
  *
@@ -23,7 +23,7 @@
 struct tg_target {
     char name[TG_TARGET_NAME_CAP]; /* target_parent 아래 디렉터리 이름 */
     int pressure_fd;               /* memory.pressure */
-    int stat_fd;                   /* memory.stat */
+    int current_fd;                /* memory.current */
     uint64_t first_seen_ns;        /* 처음 발견한 단조 시각. 데몬 시작 때 있던 항목은 0 */
 };
 

@@ -30,6 +30,12 @@ int tg_read_fd(int fd, char *buf, size_t cap, size_t *len);
 /* 경로를 열어 한 번 읽고 닫는다. 초기화나 테스트에서 쓴다. */
 int tg_read_path(const char *path, char *buf, size_t cap, size_t *len);
 
+/*
+ * 숫자 하나만 든 파일(cgroup memory.current 등)을 읽는다. 앞의 공백 뒤 10진수 하나를 읽고
+ * 뒤에는 공백·개행만 허용한다. 숫자가 없거나 다른 글자가 있으면 -EINVAL, uint64_t를 넘으면 -EOVERFLOW.
+ */
+int tg_parse_u64(const char *buf, size_t len, uint64_t *out);
+
 /* ---------- PSI (/proc/pressure/memory, cgroup memory.pressure) ---------- */
 
 struct tg_psi_line {

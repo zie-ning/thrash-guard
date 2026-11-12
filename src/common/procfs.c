@@ -362,3 +362,31 @@ int tg_cg_cgstat_parse(const char *buf, size_t len, struct tg_cg_cgstat *out, ui
     memset(out, 0, sizeof(*out));
     return tg_kv_parse(buf, len, tg_cg_cgstat_fields, tg_cg_cgstat_nfields, out, found);
 }
+
+int tg_parse_u64(const char *buf, size_t len, uint64_t *out)
+{
+    size_t i = 0;
+    uint64_t v = 0;
+    bool any = false;
+
+    if (buf == NULL || out == NULL)
+        return -EINVAL;
+    while (i < len && (buf[i] == ' ' || buf[i] == '\t'))
+        i++;
+    for (; i < len && buf[i] >= '0' && buf[i] <= '9'; i++) {
+        uint64_t d = (uint64_t)(buf[i] - '0');
+
+        if (v > (UINT64_MAX - d) / 10)
+            return -EOVERFLOW;
+        v = v * 10 + d;
+        any = true;
+    }
+    if (!any)
+        return -EINVAL;
+    for (; i < len; i++) {
+        if (buf[i] != ' ' && buf[i] != '\t' && buf[i] != '\n' && buf[i] != '\r' && buf[i] != '\0')
+            return -EINVAL;
+    }
+    *out = v;
+    return 0;
+}
