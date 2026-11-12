@@ -54,7 +54,7 @@ static void sim_init(struct sim *s, uint32_t nc)
 
 static struct tg_decision sim_tick(struct sim *s, uint32_t sys_pct)
 {
-    struct tg_sample smp;
+    struct tg_sample smp = {0};
     uint32_t n = 0;
 
     s->ticks++;
@@ -662,7 +662,7 @@ static void test_candidate_disappears(void)
 static void test_irregular_interval(void)
 {
     struct sim s;
-    struct tg_sample smp;
+    struct tg_sample smp = {0};
     struct tg_cand_sample c;
     struct tg_decision d;
     uint64_t now = SEC(1000);

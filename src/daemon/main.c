@@ -233,18 +233,6 @@ int main(int argc, char **argv)
         return EXIT_CONFIG;
     }
 
-    /*
-     * 보호 대상(oom_score_adj=-1000인 프로세스가 든 cgroup)을 후보에서 빼는 판정이 아직 없다.
-     * 그동안 실제 종료를 허용하면 sshd 같은 필수 프로세스가 든 cgroup을 죽일 수 있으므로 막는다.
-     * 보호 판정을 구현하면 이 검사를 지운다.
-     */
-    if (!cfg.dry_run) {
-        fprintf(stderr,
-                "thrash-guard: 필수 프로세스 보호 판정이 아직 구현되지 않아 실제 종료 모드"
-                "(--no-dry-run)를 쓸 수 없다. dry-run으로만 실행한다.\n");
-        return EXIT_CONFIG;
-    }
-
     print_config(&cfg, foreground);
     return run_daemon(&cfg);
 }

@@ -14,7 +14,7 @@
 |---|---|
 | `src/common/` | `/proc`·cgroup 파서, 자기 보호, 할당 없는 문자열 조립 (수집기·데몬 공용) |
 | `src/sampler/` | `tg-sampler`: 스래싱 중에도 버티도록 메모리를 고정하고, 지표를 UDP로 VM 밖에 보내는 수집기 |
-| `src/daemon/` | `thrash-guard` 데몬: 설정, 안전장치, 후보 탐색, 판단, 로그, 이벤트 루프, 종료 경로 (보호 drop-in과 서비스 파일은 구현 예정) |
+| `src/daemon/` | `thrash-guard` 데몬: 설정, 안전장치, 후보 탐색, 판단, 로그, 이벤트 루프, 종료 경로 (서비스 파일은 구현 예정) |
 | `lab/collect/` | `tg_receiver.py`: VM 밖에서 수집기 출력을 받아 저장하는 수신기 |
 | `tests/` | 단위 테스트와 실제 커널에서 캡처한 `/proc` fixture |
 

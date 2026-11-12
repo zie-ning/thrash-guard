@@ -17,6 +17,9 @@
 
 #define TG_READER_BUF 8192
 
+/* 후보 표를 마지막으로 계산한 지 이보다 오래되면 종료하지 않는다 (임시) */
+#define TG_TARGETS_STALE_NS (10ull * 1000000000ull)
+
 struct tg_reader {
     int psi_fd;
     int meminfo_fd;

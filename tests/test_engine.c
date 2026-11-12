@@ -99,6 +99,8 @@ static void mk_cg(const char *name, uint64_t bytes)
     write_file(p, "");
     cg_path(p, sizeof(p), name, "cgroup.kill");
     write_file(p, "");
+    cg_path(p, sizeof(p), name, "cgroup.procs"); /* 프로세스가 없다. 없으면 보호 여부를 알 수 없어 후보에서 빠진다 */
+    write_file(p, "");
     cg_path(p, sizeof(p), name, "memory.current");
     snprintf(v, sizeof(v), "%llu\n", (unsigned long long)bytes);
     write_file(p, v);
@@ -167,7 +169,7 @@ static void env_up_with(bool dry_run)
     TG_CHECK(tg_log_open(&lg, &o) == 0);
     TG_CHECK(tg_scanner_start(&sc, parent, 60000) == 0);
     TG_CHECK(tg_engine_init(&eng, &cfg, &lg, &sc, psi_path, mem_path) == 0);
-    now_ns = T0;
+    now_ns = tg_now_ns(); /* 후보 표의 갱신 시각(실제 단조 시계)과 같은 시계를 쓴다 */
     env_up = true;
 }
 
@@ -400,6 +402,53 @@ static void test_targets_full_is_reported(void)
     TG_CHECK(strstr(strstr(logbuf, "targets full") + 1, "targets full") == NULL);
 }
 
+static void restart_scanner(void)
+{
+    tg_scanner_stop(&sc);
+    TG_CHECK(tg_scanner_start(&sc, parent, 60000) == 0);
+}
+
+static void test_unknown_protection_excludes_candidate(void)
+{
+    char p[256];
+
+    env_up_with(false);
+    /* A는 가장 크지만 cgroup.procs를 읽을 수 없어 보호 여부를 모른다. 모르면 보호된 것으로 본다 */
+    cg_path(p, sizeof(p), "A", "cgroup.procs");
+    TG_CHECK(unlink(p) == 0);
+    set_current("B", MIB(300));
+    restart_scanner();
+
+    tg_engine_trigger(&eng, now_ns);
+    ticks(5, FULL60_US);
+    TG_CHECK_EQ_U64(eng.st.kills, 1);
+    {
+        char a[8];
+        char b[8];
+
+        read_kill("A", a, sizeof(a));
+        read_kill("B", b, sizeof(b));
+        TG_CHECK(strcmp(a, "") == 0); /* A는 건드리지 않는다 */
+        TG_CHECK(strcmp(b, "1") == 0);
+    }
+    env_down();
+    TG_CHECK(strstr(logbuf, "judge kill cand=B") != NULL);
+    TG_CHECK(strstr(logbuf, "protected=1") != NULL);
+}
+
+static void test_stale_targets_block_kill(void)
+{
+    env_up_with(false);
+    /* 후보 표를 마지막으로 계산한 지 30초가 지났다(스캔 스레드가 막힌 상황). 보호 상태를 믿을 수 없다 */
+    now_ns += 30ull * 1000000000ull;
+    tg_engine_trigger(&eng, now_ns);
+    ticks(5, FULL60_US);
+    TG_CHECK_EQ_U64(eng.st.kills, 0);
+    TG_CHECK_EQ_U64(eng.st.skips, 1);
+    env_down();
+    TG_CHECK(strstr(logbuf, "judge skip reason=targets_stale") != NULL);
+}
+
 static void test_late_tick(void)
 {
     env_up_with(true);
@@ -519,6 +568,8 @@ int main(void)
     TG_RUN(test_mem_available_guard);
     TG_RUN(test_growth_is_chosen);
     TG_RUN(test_targets_full_is_reported);
+    TG_RUN(test_unknown_protection_excludes_candidate);
+    TG_RUN(test_stale_targets_block_kill);
     TG_RUN(test_late_tick);
     TG_RUN(test_sample_error);
     TG_RUN(test_loop_signal_stops);

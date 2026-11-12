@@ -389,6 +389,12 @@ struct tg_decision tg_judge_tick(struct tg_judge *j, const struct tg_sample *s,
         }
     }
 
+    /* 보호 상태가 낡았으면 종료하지 않는다. 그동안 보호 설정이 바뀌었을 수 있다. */
+    if (s->targets_stale) {
+        skip_once(j, &d, TG_R_STALE_TARGETS);
+        return d;
+    }
+
     /* 후보 선택 */
     for (uint32_t i = 0; i < nc; i++) {
         const struct tg_cand_stat *st = &j->stat[i];
@@ -443,6 +449,8 @@ const char *tg_judge_reason_name(enum tg_judge_reason r)
         return "calm";
     case TG_R_MEM_AVAILABLE:
         return "mem_available";
+    case TG_R_STALE_TARGETS:
+        return "targets_stale";
     case TG_R_NO_CANDIDATE:
         return "no_candidate";
     case TG_R_NO_CULPRIT:
