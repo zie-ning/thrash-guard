@@ -1,5 +1,5 @@
 /*
- * tg_test.h - 최소 단위 테스트 도구 (D4)
+ * tg_test.h - 최소 단위 테스트 도구
  *
  * 사용법:
  *   static void test_foo(void) { TG_CHECK(1 + 1 == 2); TG_CHECK_EQ_U64(x, 3); }

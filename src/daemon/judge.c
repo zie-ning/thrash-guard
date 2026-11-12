@@ -7,7 +7,7 @@
 
 #include <string.h>
 
-/* 관찰 중 구역 평균이 X의 이 비율 미만이면 관찰을 끝낸다 (D22, 근거 없는 임시 상수) */
+/* 관찰 중 구역 평균이 X의 이 비율 미만이면 관찰을 끝낸다 (근거 없는 임시 상수) */
 #define CALM_DIVISOR 2
 
 static uint32_t sat32(uint64_t v)

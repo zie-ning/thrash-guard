@@ -5,7 +5,7 @@
 #   make test            # 단위 테스트 (ASan/UBSan, 동적 링크)
 #   make lint            # cppcheck 정적 분석
 #
-# D2 결정: glibc·musl 두 빌드를 모두 지원하고, M3에서 실측해 기본값을 고른다.
+# libc 선택: glibc·musl 두 빌드를 모두 지원하고, M3에서 실측해 기본값을 고른다.
 
 LIBC ?= glibc
 ifeq ($(LIBC),musl)

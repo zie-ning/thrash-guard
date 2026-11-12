@@ -20,7 +20,7 @@ static void test_defaults(void)
     struct tg_cfg_err e;
 
     tg_config_defaults(&c);
-    /* D13 초기값 */
+    /* 초기값 */
     TG_CHECK_EQ_U64(c.trigger_stall_us, 150000);
     TG_CHECK_EQ_U64(c.trigger_window_us, 1000000);
     TG_CHECK_EQ_U64(c.full_pct, 10);
@@ -94,7 +94,7 @@ static void test_unknown_key(void)
     struct tg_config c;
     struct tg_cfg_err e;
 
-    /* 오타가 조용히 무시되면 안 된다(D14) */
+    /* 오타가 조용히 무시되면 안 된다 */
     TG_CHECK(parse("full_pct=10\ncooldwon_sec=5\n", &c, &e) == -EINVAL);
     TG_CHECK(e.line == 2);
     TG_CHECK(strcmp(e.key, "cooldwon_sec") == 0);
@@ -166,7 +166,7 @@ static void test_dry_run_policy(void)
     struct tg_config c;
     struct tg_cfg_err e;
 
-    /* 설정 파일로는 dry-run을 끌 수 없다(D14) */
+    /* 설정 파일로는 dry-run을 끌 수 없다 */
     TG_CHECK(parse("dry_run=no\n", &c, &e) == -EPERM);
     TG_CHECK(e.line == 1);
     TG_CHECK(strcmp(e.key, "dry_run") == 0);

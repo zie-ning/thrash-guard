@@ -13,7 +13,7 @@
 #define CFG_FILE_CAP 4096 /* 설정 파일 최대 크기(NUL 포함). 넘으면 -ENOBUFS */
 #define CFG_KEY_CAP sizeof(((struct tg_cfg_err *)0)->key)
 
-/* ---------- 기본값 (D13, 모두 측정 전 임시값) ---------- */
+/* ---------- 기본값 (모두 측정 전 임시값) ---------- */
 
 void tg_config_defaults(struct tg_config *cfg)
 {
@@ -218,7 +218,7 @@ static int parse_line(const char *p, const char *le, struct tg_config *cfg,
     v = trim_left(eq + 1, le);
     vend = trim_right(v, le);
 
-    /* dry_run은 설정 파일에서 켤 수만 있다. 끄는 것은 CLI --no-dry-run만 가능하다(D14). */
+    /* dry_run은 설정 파일에서 켤 수만 있다. 끄는 것은 CLI --no-dry-run만 가능하다. */
     if (klen == strlen("dry_run") && memcmp(p, "dry_run", klen) == 0) {
         if (token_eq(v, vend, "yes")) {
             cfg->dry_run = true;

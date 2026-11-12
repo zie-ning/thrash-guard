@@ -118,7 +118,7 @@ static void test_sustained_thrash_kills(void)
     tg_judge_trigger(&s.j);
     d = run_until(&s, 100, 30, cp, sc);
 
-    /* 최소 감지 지연: 첫 샘플은 기준점, 40칸이 차는 41번째에 결정 (D22) */
+    /* 최소 감지 지연: 첫 샘플은 기준점, 40칸이 차는 41번째에 결정  */
     TG_CHECK_EQ_U64(s.ticks, 41);
     TG_CHECK(d.kind == TG_J_KILL);
     TG_CHECK(d.cand_index == 0);
@@ -126,7 +126,7 @@ static void test_sustained_thrash_kills(void)
     TG_CHECK_EQ_U64(d.cand_avg_x100, 4000);
     TG_CHECK_EQ_U64(d.cand_pgscan_delta, 4000);
 
-    /* 후보별 지표가 로그용으로 남는다 (D20) */
+    /* 후보별 지표가 로그용으로 남는다  */
     st = tg_judge_stats(&s.j, &n);
     TG_CHECK_EQ_U64(n, 3);
     TG_CHECK_EQ_U64(st[1].full_avg_x100, 500);
@@ -290,7 +290,7 @@ static void test_selection_by_pgscan(void)
     const uint32_t cp[NC] = {20, 15, 0};
     struct tg_decision d;
 
-    /* 압력은 A가 더 크지만 회수 부담(pgscan)은 B가 크다: B를 고른다 (D20) */
+    /* 압력은 A가 더 크지만 회수 부담(pgscan)은 B가 크다: B를 고른다  */
     {
         const uint32_t sc[NC] = {10, 500, 0};
 

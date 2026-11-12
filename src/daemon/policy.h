@@ -5,7 +5,7 @@
  * 시각은 모두 단조 시계 나노초다. 힙 할당을 하지 않는다.
  *
  * dry-run에서도 "종료했다면" 기록(tg_policy_record_kill)을 남겨 쿨다운과 상한을
- * 소모한다(D21). 그래야 dry-run 로그가 실제 모드의 동작을 그대로 보여 준다.
+ * 소모한다. 그래야 dry-run 로그가 실제 모드의 동작을 그대로 보여 준다.
  */
 #ifndef TG_POLICY_H
 #define TG_POLICY_H

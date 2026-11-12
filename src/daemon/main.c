@@ -108,7 +108,7 @@ int main(int argc, char **argv)
         return EXIT_USAGE;
     }
 
-    /* 우선순위: 기본값 -> 설정 파일 -> CLI (D14) */
+    /* 우선순위: 기본값 -> 설정 파일 -> CLI  */
     tg_config_defaults(&cfg);
     if (config_path != NULL) {
         rc = tg_config_load(config_path, &cfg, &err);
