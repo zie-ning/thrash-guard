@@ -59,15 +59,21 @@ flowchart TD
 
 ## 4. 어떻게 종료하나
 
-| 설정(`action`) | 동작 | 희생자 선택 |
-|---|---|---|
-| `cgroup_kill` (기본) | 선택한 cgroup의 `cgroup.kill`에 `1`을 쓴다 | 데몬(3절) |
-| `oom_kill` | `/proc/sysrq-trigger`에 `f`를 써서 커널 OOM killer를 한 번 실행 | 커널(`oom_score`, `oom_score_adj` 존중) |
+MVP는 `cgroup_kill` 한 가지다. 선택한 cgroup의 `cgroup.kill`에 `1`을 쓴다(희생자 선택은 3절).
 
 `cgroup.kill`은 같은 SIGKILL을 cgroup 안의 모든 프로세스에 **커널이 한꺼번에 전달**하는 기능이다(리눅스 5.14 이상). pid 목록을 읽지 않아 스래싱 중에도 파일 쓰기 한 번으로 끝나고,
-목록을 읽은 뒤 새로 생긴 프로세스를 놓치거나 pid가 재사용되어 엉뚱한 프로세스를 죽일 위험이 없다. `oom_kill`은 프로세스 단위로 죽이고 `oom_score_adj`를 존중하므로
-필수와 문제 프로세스가 한 cgroup에 섞인 경우를 보완한다. 이 방식의 세부 동작(패닉 여부, 신호, 대상이 없을 때)은 기억에 의존한 가설이라 VM에서 확인한다.
-두 방식은 같은 감지와 보호 설정을 공유하고, 검증 뒤 기본값을 재검토한다.
+목록을 읽은 뒤 새로 생긴 프로세스를 놓치거나 pid가 재사용되어 엉뚱한 프로세스를 죽일 위험이 없다.
+
+**구현 규칙**: 종료 함수(`src/daemon/killer`)는 `target_parent`를 연 디렉터리 핸들과 cgroup 이름을 받아, 이름을 검증한 뒤(`/` 포함, `.`, `..`, 빈 이름, 용량 초과는 거부)
+그 핸들 기준 `openat`으로 `<이름>/cgroup.kill`을 열어 `1`을 쓴다. dry-run은 호출자(이벤트 루프)가 처리하고 종료 함수는 모른다. 실패 이유는 음수 errno로 구분한다
+(`-ENOENT` cgroup이 이미 없음, `-ENOTSUP` 이 커널에 `cgroup.kill` 없음, `-EACCES` 권한 없음, `-EINVAL` 잘못된 이름). 반환 성공은 "신호를 전달했다"까지이고 종료 확인은 PSI가 가라앉는지로 한다.
+
+**`oom_kill`은 MVP에서 뺀다**: `/proc/sysrq-trigger`에 `f`를 써 커널 OOM killer를 실행하는 방식인데, 커널이 시스템 전체에서 고르므로 `target_parent` 아래만 종료한다는 안전 원칙과 맞지 않고
+3절의 선택 규칙도 쓰지 못하며, 세부 동작도 확인하지 못했다. 필수와 문제 프로세스가 한 cgroup에 섞인 경우의 보완책은 후속(M5)에서 범위 문제와 함께 설계한다.
+
+**종료와 CPU**: 두 방식 모두 "파일에 쓴다"는 것은 시스템 콜이다. 데몬 스레드가 CPU를 받아 `write()`를 실행하면 커널이 그 호출 안에서 대상에 SIGKILL을 표시하고 깨운다(별도 커널 프로세스가 파일을 감시하는 구조가 아니다).
+실제로 사라지는 것은 대상이 CPU를 받아 종료 처리를 마친 뒤이고, 디스크 입출력을 기다리는 상태의 대상은 그 대기가 끝나야 한다. 그래서 CPU가 포화되면 `write()` 시작과 대상의 종료가 모두 늦어질 수 있다.
+이 프로젝트가 겨냥한 스래싱은 CPU보다 메모리·입출력 병목이고, 그쪽은 `mlockall`로 대비한다. CPU 경쟁은 보호하지 못하는 **한계**이며, 서비스 파일(M3-8)에 `CPUWeight` 상향을 넣고 M4에서 CPU 부하를 섞어 확인한다.
 
 ## 5. 안전장치
 
@@ -95,6 +101,7 @@ flowchart TD
 | `src/daemon/policy` | 유예, 쿨다운, 시간당 상한 | 완료 |
 | `src/daemon/targets`, `scanner` | 후보 cgroup 표, 스캔 스레드 | 완료 (보호 제외 규칙 추가 예정) |
 | `src/daemon/log` | 링버퍼 로그, 기록 스레드 | 완료 |
+| `src/daemon/killer` | 종료 실행(`cgroup.kill` 쓰기) | 완료 (이벤트 루프에 아직 연결되지 않음) |
 | `src/daemon/judge` | 판단(순수 함수): 시스템 PSI 평균, `MemAvailable` 보호선, 사용량·증가량 선택 | 완료 (이벤트 루프에 아직 연결되지 않음) |
 | `src/daemon/main` | CLI, 설정 로드 | 이벤트 루프 미구현 |
 
@@ -119,7 +126,7 @@ flowchart TD
 - 언어는 **C**(C11)다. 핵심 경로가 시스템 콜 몇 개이고 런타임과 GC가 없어 무할당을 검증하기 쉽다.
 - 대상 환경은 cgroup v2, PSI 활성, `cgroup.kill` 지원(리눅스 5.14 이상), root 권한이다. PSI 트리거 등록은 root가 필요한 것을 확인했다([lab/environment.md](../lab/environment.md)).
 - 빌드는 단일 `Makefile`, 테스트는 자체 최소 assert 헤더와 `/proc` 파일 fixture, 정적 링크 libc는 glibc와 musl을 모두 지원하고 실측으로 기본값을 고른다.
-- **미결**: 컨테이너가 없는 일반 서버의 기본 `target_parent`, PSI 트리거 등록 실패 시 동작(제안: 시작 거부), `oom_kill`의 세부 동작.
+- **미결**: 컨테이너가 없는 일반 서버의 기본 `target_parent`, PSI 트리거 등록 실패 시 동작(제안: 시작 거부).
 
 ## 10. 참고 자료
 
