@@ -519,6 +519,65 @@ static void test_counter_reset(void)
     TG_CHECK_EQ_U64(d.sys_avg_x100, 4875); /* 39칸 x 50% / 40칸 */
 }
 
+static void test_gap_equal_to_window_discards_old(void)
+{
+    struct sim s;
+    struct tg_decision d;
+
+    /* 압력 100%로 38칸을 쌓은 뒤 정확히 윈도 길이(10초) 동안 샘플이 없었다. 공백 동안 압력은 없었다 */
+    sim_init(&s, 1);
+    tg_judge_trigger(&s.j);
+    d = run_until(&s, 39, 100);
+    TG_CHECK(d.kind == TG_J_WATCHING);
+    s.now += 39 * TICK_NS; /* sim_tick이 한 틱을 더해 공백은 40틱 = 10초 */
+    d = sim_tick(&s, 0);
+
+    /*
+     * 옛 100% 자료가 남아 있으면 평균이 40%를 넘어 종료한다. 시간 기준으로 오래된 칸을 빼므로
+     * 최근 10초(압력 없음)만 보고 진정으로 판단한다.
+     */
+    TG_CHECK(d.kind == TG_J_IDLE);
+    TG_CHECK(d.reason == TG_R_CALM);
+    TG_CHECK_EQ_U64(d.sys_avg_x100, 0);
+}
+
+static void test_short_gap_keeps_recent_data(void)
+{
+    struct sim s;
+    struct tg_decision d;
+
+    /* 윈도보다 짧은 공백(2초)에서는 최근 자료를 버리지 않는다. 압력이 계속되면 곧 종료 결정이 난다 */
+    sim_init(&s, 1);
+    tg_judge_trigger(&s.j);
+    d = run_until(&s, 30, 60);
+    TG_CHECK(d.kind == TG_J_WATCHING);
+    s.now += 7 * TICK_NS;
+    s.sys_us += 7 * 150000ull;
+    d = run_until(&s, 20, 60);
+    TG_CHECK(d.kind == TG_J_KILL);
+    TG_CHECK(d.sys_avg_x100 >= 5900 && d.sys_avg_x100 <= 6100);
+}
+
+static void test_recreated_cgroup_restarts_window(void)
+{
+    struct sim s;
+    struct tg_decision d;
+
+    sim_init(&s, 1);
+    tg_judge_trigger(&s.j);
+    d = run_until(&s, 30, 10); /* 압력이 낮아 계속 관찰만 한다 */
+    TG_CHECK(d.kind == TG_J_WATCHING);
+
+    /* 같은 이름으로 cgroup이 다시 만들어졌다(발견 시각이 달라짐). 옛 사용량 기록을 버린다 */
+    s.first_seen[0] = s.now - SEC(500);
+    d = run_until(&s, 100, 60);
+    TG_CHECK(d.kind == TG_J_SKIP);
+    TG_CHECK(d.reason == TG_R_NO_CANDIDATE); /* 새 기록이 윈도를 채우기 전 */
+    d = run_until(&s, 100, 60);
+    TG_CHECK(d.kind == TG_J_KILL);
+    TG_CHECK_EQ_U64(s.ticks, 70); /* 변경 다음 틱(31번째)부터 40칸이 모이는 70번째 */
+}
+
 static void test_candidate_disappears(void)
 {
     struct sim s;
@@ -614,6 +673,9 @@ int main(void)
     TG_RUN(test_grace_excludes_candidate);
     TG_RUN(test_policy_blocks);
     TG_RUN(test_counter_reset);
+    TG_RUN(test_gap_equal_to_window_discards_old);
+    TG_RUN(test_short_gap_keeps_recent_data);
+    TG_RUN(test_recreated_cgroup_restarts_window);
     TG_RUN(test_candidate_disappears);
     TG_RUN(test_irregular_interval);
     TG_RUN(test_names);

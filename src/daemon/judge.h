@@ -43,9 +43,14 @@ struct tg_win {
     uint32_t filled;
 };
 
-/* 최근 n칸의 후보 사용량(KiB, 64비트라 수 TiB 호스트에서도 포화하지 않는다). 칸이 다 차면 head가 가장 오래된 값이다 */
+/*
+ * 최근 사용량(KiB, 64비트라 수 TiB 호스트에서도 포화하지 않는다)과 각 샘플의 시각.
+ * 칸 수가 아니라 시간으로 관리한다: 가장 오래된 샘플을 빼도 윈도가 대표하는 시간(span)을 채우면 뺀다.
+ * 가장 오래된 칸은 (head - filled) 위치다.
+ */
 struct tg_memwin {
     uint64_t kib[TG_MAX_WINDOW_SAMPLES];
+    uint64_t ns[TG_MAX_WINDOW_SAMPLES];
     uint32_t head;
     uint32_t filled;
 };
@@ -53,6 +58,7 @@ struct tg_memwin {
 struct tg_judge_slot {
     bool used;
     char name[TG_TARGET_NAME_CAP];
+    uint64_t first_seen_ns; /* 같은 이름으로 cgroup이 다시 만들어지면 달라진다. 달라지면 윈도를 버린다 */
     struct tg_memwin mem;
 };
 
@@ -98,6 +104,7 @@ struct tg_decision {
 struct tg_judge {
     /* 설정 복사본 */
     uint32_t nsamples;
+    uint64_t interval_ns;
     uint64_t span_us; /* 윈도가 대표하는 시간(칸 수 x 샘플 간격). 샘플 사이가 이보다 벌어지면 윈도를 버린다 */
     uint32_t full_pct;
     uint32_t mem_avail_pct;

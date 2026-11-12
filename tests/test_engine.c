@@ -405,9 +405,15 @@ static void test_late_tick(void)
     env_up_with(true);
     tg_engine_trigger(&eng, now_ns);
     ticks(1, 0);
-    /* 예정보다 3틱 늦게 도착한다 */
+    /*
+     * 예정보다 3틱 늦게 도착한다. 공백 동안 압력이 있었다(윈도 평균이 관찰 유지 구간인 30%).
+     * 압력이 없었다면 공백 한 칸이 윈도를 채워 곧바로 진정으로 판단한다.
+     */
     now_ns += 3 * TICK_NS;
+    full_us += 300000;
+    set_full(full_us);
     tg_engine_tick(&eng, now_ns);
+    TG_CHECK(tg_engine_watching(&eng));
     TG_CHECK_EQ_U64(eng.st.late_ticks, 1);
     TG_CHECK(eng.st.max_delay_ns >= 3 * TICK_NS);
     /* 따라잡으려고 연달아 읽지 않고 지금부터 한 틱 뒤로 잡는다 */

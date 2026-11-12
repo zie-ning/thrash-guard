@@ -31,12 +31,72 @@ static void win_push(struct tg_win *w, uint32_t cap, uint32_t v)
     w->head = (w->head + 1) % cap;
 }
 
-static void memwin_push(struct tg_memwin *w, uint32_t cap, uint64_t kib)
+/* 가장 오래된 칸을 뺀다. */
+static void win_pop_oldest(struct tg_win *w, uint32_t cap)
 {
+    uint32_t idx = (w->head + cap - w->filled) % cap;
+
+    w->sum -= w->v[idx];
+    w->filled--;
+}
+
+/*
+ * 가장 오래된 칸을 빼도 윈도가 대표하는 시간(span)을 채우면 뺀다. 공백(지연, 읽기 실패)이 있었던
+ * 뒤에는 칸 수는 적어도 시간으로는 옛 자료가 최근 span을 대표하지 못하기 때문이다.
+ * 공백 하나가 경계에 걸치면 그 칸은 통째로 남는다(칸 안의 시간 분포를 알 수 없다).
+ */
+static void sys_trim(struct tg_judge *j)
+{
+    uint32_t cap = j->nsamples;
+
+    while (j->sys_dt.filled > 1) {
+        uint32_t idx = (j->sys_dt.head + cap - j->sys_dt.filled) % cap;
+
+        if (j->sys_dt.sum - j->sys_dt.v[idx] < j->span_us)
+            break;
+        win_pop_oldest(&j->sys_full, cap);
+        win_pop_oldest(&j->sys_dt, cap);
+    }
+}
+
+static uint32_t memwin_oldest(const struct tg_memwin *w, uint32_t cap)
+{
+    return (w->head + cap - w->filled) % cap;
+}
+
+static void memwin_push(struct tg_judge *j, struct tg_memwin *w, uint64_t kib, uint64_t now_ns)
+{
+    uint32_t cap = j->nsamples;
+    uint64_t span_ns = j->span_us * 1000ull;
+
     if (w->filled < cap)
         w->filled++;
     w->kib[w->head] = kib;
+    w->ns[w->head] = now_ns;
     w->head = (w->head + 1) % cap;
+
+    while (w->filled > 1) {
+        uint32_t second = (memwin_oldest(w, cap) + 1) % cap;
+        uint64_t covered = now_ns > w->ns[second] ? now_ns - w->ns[second] : 0;
+
+        if (covered + j->interval_ns < span_ns)
+            break;
+        w->filled--;
+    }
+}
+
+/* 윈도가 span을 채웠는가: 각 샘플이 한 간격을 대표한다고 본다. */
+static bool memwin_ready(const struct tg_judge *j, const struct tg_memwin *w)
+{
+    uint32_t cap = j->nsamples;
+    uint64_t newest;
+    uint64_t oldest;
+
+    if (w->filled == 0)
+        return false;
+    newest = w->ns[(w->head + cap - 1) % cap];
+    oldest = w->ns[memwin_oldest(w, cap)];
+    return (newest - oldest) + j->interval_ns >= j->span_us * 1000ull;
 }
 
 /* 누적값의 증가분. 카운터가 줄었으면 0으로 본다. */
@@ -69,6 +129,7 @@ void tg_judge_init(struct tg_judge *j, const struct tg_config *cfg)
 {
     memset(j, 0, sizeof(*j));
     j->nsamples = tg_config_window_samples(cfg);
+    j->interval_ns = (uint64_t)cfg->sample_interval_ms * 1000000ull;
     j->span_us = (uint64_t)j->nsamples * cfg->sample_interval_ms * 1000ull;
     j->full_pct = cfg->full_pct;
     j->mem_avail_pct = cfg->mem_avail_pct;
@@ -95,7 +156,7 @@ static struct tg_judge_slot *slot_find(struct tg_judge *j, const char *name)
     return NULL;
 }
 
-static struct tg_judge_slot *slot_alloc(struct tg_judge *j, const char *name)
+static struct tg_judge_slot *slot_alloc(struct tg_judge *j, const char *name, uint64_t first_seen_ns)
 {
     for (uint32_t i = 0; i < TG_MAX_TARGETS; i++) {
         struct tg_judge_slot *s = &j->slot[i];
@@ -104,6 +165,7 @@ static struct tg_judge_slot *slot_alloc(struct tg_judge *j, const char *name)
         if (s->used)
             continue;
         s->used = true;
+        s->first_seen_ns = first_seen_ns;
         memset(&s->mem, 0, sizeof(s->mem));
         n = strnlen(name, sizeof(s->name) - 1);
         memcpy(s->name, name, n);
@@ -154,15 +216,21 @@ static void fill_stat(const struct tg_judge *j, const struct tg_judge_slot *sl,
     memset(st, 0, sizeof(*st));
     st->is_protected = c->is_protected;
     st->in_grace = tg_policy_in_grace(c->first_seen_ns, s->now_ns, j->grace_sec);
-    if (sl == NULL || sl->mem.filled < j->nsamples)
+    if (sl == NULL || !memwin_ready(j, &sl->mem))
         return;
     st->ready = true;
 
-    for (uint32_t i = 0; i < j->nsamples; i++) {
-        if (sl->mem.kib[i] > max_kib)
-            max_kib = sl->mem.kib[i];
+    {
+        uint32_t oldest = memwin_oldest(&sl->mem, j->nsamples);
+
+        for (uint32_t k = 0; k < sl->mem.filled; k++) {
+            uint64_t v = sl->mem.kib[(oldest + k) % j->nsamples];
+
+            if (v > max_kib)
+                max_kib = v;
+        }
+        first_kib = sl->mem.kib[oldest];
     }
-    first_kib = sl->mem.kib[sl->mem.head]; /* 가득 찼으므로 head가 가장 오래된 값 */
 
     st->max_bytes = max_kib * 1024;
     st->growth_bytes = max_kib > first_kib ? (max_kib - first_kib) * 1024 : 0;
@@ -220,6 +288,7 @@ struct tg_decision tg_judge_tick(struct tg_judge *j, const struct tg_sample *s,
 
         win_push(&j->sys_full, j->nsamples, sat32(delta(s->sys_full_total_us, j->sys_prev_total_us)));
         win_push(&j->sys_dt, j->nsamples, sat32(dt_us));
+        sys_trim(j);
     }
     j->sys_has_prev = true;
     j->sys_prev_total_us = s->sys_full_total_us;
@@ -236,15 +305,20 @@ struct tg_decision tg_judge_tick(struct tg_judge *j, const struct tg_sample *s,
         const struct tg_cand_sample *c = &s->cand[i];
         struct tg_judge_slot *sl = slot_find(j, c->name);
 
+        if (sl != NULL && sl->first_seen_ns != c->first_seen_ns) {
+            /* 같은 이름이지만 다시 만들어진 cgroup이다. 옛 사용량 기록을 버린다 */
+            sl->used = false;
+            sl = NULL;
+        }
         if (sl == NULL)
-            sl = slot_alloc(j, c->name);
+            sl = slot_alloc(j, c->name, c->first_seen_ns);
         if (sl != NULL) /* 표 크기가 TG_MAX_TARGETS라 정상 입력에서는 항상 성공한다 */
-            memwin_push(&sl->mem, j->nsamples, c->mem_bytes / 1024);
+            memwin_push(j, &sl->mem, c->mem_bytes / 1024, s->now_ns);
         fill_stat(j, sl, c, s, &j->stat[i]);
     }
 
-    if (j->sys_full.filled < j->nsamples)
-        return d; /* 윈도가 다 차기 전에는 결정하지 않는다 */
+    if (j->sys_dt.sum < j->span_us)
+        return d; /* 윈도가 대표하는 시간을 채우기 전에는 결정하지 않는다 */
 
     sys_avg = avg_x100(j->sys_full.sum, j->sys_dt.sum);
     x100 = j->full_pct * 100;

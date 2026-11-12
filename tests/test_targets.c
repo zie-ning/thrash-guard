@@ -173,6 +173,46 @@ static void test_rebuild_failure_keeps_cur(void)
     rm_cg("a");
 }
 
+static void test_recreated_cgroup_is_new_entry(void)
+{
+    struct tg_targets x;
+    struct tg_targets y;
+    const struct tg_target *e;
+    char p[256];
+    char q[256];
+    int old_fd;
+
+    mk_cg("a", true, true);
+    tg_targets_init(&x);
+    tg_targets_init(&y);
+    TG_CHECK(tg_targets_rebuild(&x, NULL, root, 1, true) == 0);
+    e = tg_targets_find(&x, "a");
+    TG_CHECK(e != NULL && e->first_seen_ns == 0);
+    old_fd = e->current_fd;
+
+    /* 같은 이름으로 다시 만들어진 cgroup: memory.current가 다른 파일이 되었다 */
+    snprintf(p, sizeof(p), "%s/a/memory.current.new", root);
+    snprintf(q, sizeof(q), "%s/a/memory.current", root);
+    touch(p);
+    TG_CHECK(rename(p, q) == 0);
+
+    TG_CHECK(tg_targets_rebuild(&y, &x, root, 5, false) == 0);
+    e = tg_targets_find(&y, "a");
+    TG_CHECK(e != NULL);
+    if (e != NULL) {
+        TG_CHECK(e->current_fd != old_fd); /* 옛 fd를 재사용하지 않는다 */
+        TG_CHECK_EQ_U64(e->first_seen_ns, 5); /* 새로 발견한 것으로 다뤄 유예가 다시 시작된다 */
+    }
+
+    /* 옛 표를 버리면 옛 fd가 닫힌다 */
+    tg_targets_release(&x, &y);
+    TG_CHECK(!fd_open(old_fd));
+    tg_targets_release(&y, NULL);
+    rm_cg("a");
+    snprintf(p, sizeof(p), "%s/a", root);
+    rmdir(p);
+}
+
 static void test_overflow(void)
 {
     struct tg_targets x;
@@ -331,6 +371,7 @@ int main(void)
     TG_RUN(test_rebuild_basic);
     TG_RUN(test_rebuild_reuse_and_remove);
     TG_RUN(test_rebuild_failure_keeps_cur);
+    TG_RUN(test_recreated_cgroup_is_new_entry);
     TG_RUN(test_overflow);
     TG_RUN(test_long_name);
     TG_RUN(test_scanner);
