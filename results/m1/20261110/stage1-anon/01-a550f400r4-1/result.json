@@ -1,0 +1,24 @@
+{
+  "id": "a550f400r4",
+  "scenario": "S1",
+  "load": {
+    "anon_mib": 550,
+    "rate_mib_s": 4,
+    "file_mib": 400,
+    "pattern": "random"
+  },
+  "max_sec": 1200,
+  "baseline_sec": 15,
+  "load_start_unix_ns": 1794293109650069489,
+  "result": {
+    "verdict": "normal",
+    "early_normal": false,
+    "ssh_max_gap_s": 2.9,
+    "ssh_probes": 1281,
+    "ssh_ok": 1281,
+    "mem_avail_min_mib": 78.3,
+    "mem_avail_min_mib_in_gap": 186.1,
+    "oom_kill_delta": 0,
+    "samples": 5021
+  }
+}

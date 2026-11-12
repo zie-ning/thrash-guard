@@ -1,0 +1,11 @@
+[03:52:58] 결과 디렉터리: /mnt/c/thrash-guard/results/m1/20261111/stage9-650-pin43-iops100/02-a650f0r4p43-2
+[03:52:58] VM 시작
+[03:53:09] VM 시작: run.qcow2, 메모리 1024 MiB, vCPU 2, I/O 상한 100 IOPS / 131072000 B/s
+[03:53:09] SSH 대기
+[03:54:40] 준비 완료: ssh -i /home/field/.ssh/tg_vm_ed25519 -p 2222 tg@127.0.0.1
+[03:55:08] mlock 메모리 43 MiB 고정
+[03:55:10] 기준 구간 15초
+[03:55:23] 부하 시작: anon 650 MiB (4 MiB/s), file 0 MiB, pin 43 MiB, 최대 1200초
+3090행 -> /mnt/c/thrash-guard/results/m1/20261111/stage9-650-pin43-iops100/02-a650f0r4p43-2/samples.csv
+판정: livelock  (SSH 최장 무응답 601.4초, MemAvailable 최소 0.0 MiB, OOM kill 0건, 샘플 3089개)
+[04:08:03] 완료: /mnt/c/thrash-guard/results/m1/20261111/stage9-650-pin43-iops100/02-a650f0r4p43-2

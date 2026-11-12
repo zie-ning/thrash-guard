@@ -1,0 +1,11 @@
+{
+  "verdict": "oom_kill",
+  "early_normal": false,
+  "ssh_max_gap_s": 286.2,
+  "ssh_probes": 485,
+  "ssh_ok": 185,
+  "mem_avail_min_mib": 0.0,
+  "mem_avail_min_mib_in_gap": 0.0,
+  "oom_kill_delta": 1,
+  "samples": 1860
+}

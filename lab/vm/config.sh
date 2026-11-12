@@ -31,6 +31,7 @@ VM_BPS="${VM_BPS:-131072000}"   # 125 MiB/s
 SSH_PORT="${SSH_PORT:-2222}"
 QMP_PORT="${QMP_PORT:-4444}"
 SEED_PORT="${SEED_PORT:-8000}"   # cloud-init 설정을 건네는 임시 HTTP 서버
+CANARY_PORT="${CANARY_PORT:-9100}"   # 컨테이너 안 카나리(S2). 호스트와 VM의 포트 번호가 같다
 
 # VM 안에서 본 호스트 주소 (QEMU user 네트워크의 고정값)
 GUEST_HOST_IP="10.0.2.2"

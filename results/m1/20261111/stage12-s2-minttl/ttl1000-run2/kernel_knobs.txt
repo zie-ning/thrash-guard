@@ -1,0 +1,4 @@
+min_ttl_ms=1000 lru_gen_enabled=0x0007 swappiness=10 thp=always [madvise] never
+/swapfile file   2G 268K   -2
+629145600
+629145600

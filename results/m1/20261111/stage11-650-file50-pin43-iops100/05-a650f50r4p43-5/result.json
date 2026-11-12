@@ -1,0 +1,29 @@
+{
+  "id": "a650f50r4p43",
+  "scenario": "S1",
+  "load": {
+    "anon_mib": 650,
+    "rate_mib_s": 4,
+    "file_mib": 50,
+    "pin_mib": 43,
+    "pattern": "random"
+  },
+  "io_limit": {
+    "iops": 100,
+    "bytes_per_sec": 131072000
+  },
+  "max_sec": 1200,
+  "baseline_sec": 15,
+  "load_start_unix_ns": 1794375194634221220,
+  "result": {
+    "verdict": "oom_kill",
+    "early_normal": false,
+    "ssh_max_gap_s": 96.1,
+    "ssh_probes": 274,
+    "ssh_ok": 175,
+    "mem_avail_min_mib": 0.0,
+    "mem_avail_min_mib_in_gap": 0.0,
+    "oom_kill_delta": 1,
+    "samples": 1023
+  }
+}

@@ -332,3 +332,33 @@ int tg_cg_memstat_parse(const char *buf, size_t len, struct tg_cg_memstat *out,
     memset(out, 0, sizeof(*out));
     return tg_kv_parse(buf, len, tg_cg_memstat_fields, tg_cg_memstat_nfields, out, found);
 }
+
+/* ---------- cgroup memory.events ---------- */
+
+const struct tg_kv_field tg_cg_events_fields[] = {
+    FIELD(tg_cg_events, "high", high),
+    FIELD(tg_cg_events, "max", max),
+    FIELD(tg_cg_events, "oom", oom),
+    FIELD(tg_cg_events, "oom_kill", oom_kill),
+};
+const size_t tg_cg_events_nfields = NFIELDS(tg_cg_events_fields);
+
+int tg_cg_events_parse(const char *buf, size_t len, struct tg_cg_events *out, uint64_t *found)
+{
+    memset(out, 0, sizeof(*out));
+    return tg_kv_parse(buf, len, tg_cg_events_fields, tg_cg_events_nfields, out, found);
+}
+
+/* ---------- cgroup.stat ---------- */
+
+const struct tg_kv_field tg_cg_cgstat_fields[] = {
+    FIELD(tg_cg_cgstat, "nr_descendants", nr_descendants),
+    FIELD(tg_cg_cgstat, "nr_dying_descendants", nr_dying_descendants),
+};
+const size_t tg_cg_cgstat_nfields = NFIELDS(tg_cg_cgstat_fields);
+
+int tg_cg_cgstat_parse(const char *buf, size_t len, struct tg_cg_cgstat *out, uint64_t *found)
+{
+    memset(out, 0, sizeof(*out));
+    return tg_kv_parse(buf, len, tg_cg_cgstat_fields, tg_cg_cgstat_nfields, out, found);
+}

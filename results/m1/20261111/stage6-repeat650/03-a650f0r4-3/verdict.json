@@ -1,0 +1,11 @@
+{
+  "verdict": "livelock",
+  "early_normal": false,
+  "ssh_max_gap_s": 604.3,
+  "ssh_probes": 823,
+  "ssh_ok": 187,
+  "mem_avail_min_mib": 0.0,
+  "mem_avail_min_mib_in_gap": 0.0,
+  "oom_kill_delta": 0,
+  "samples": 3161
+}

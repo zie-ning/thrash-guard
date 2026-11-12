@@ -131,6 +131,32 @@ extern const size_t tg_cg_memstat_nfields;
 int tg_cg_memstat_parse(const char *buf, size_t len, struct tg_cg_memstat *out,
                         uint64_t *found);
 
+/* ---------- cgroup v2 memory.events ---------- */
+
+struct tg_cg_events {
+    uint64_t high;     /* memory.high를 넘어 회수를 강제당한 횟수 */
+    uint64_t max;      /* memory.max에 닿은 횟수 */
+    uint64_t oom;      /* cgroup OOM 상황에 들어간 횟수 */
+    uint64_t oom_kill; /* cgroup OOM으로 프로세스가 죽은 횟수 */
+};
+
+extern const struct tg_kv_field tg_cg_events_fields[];
+extern const size_t tg_cg_events_nfields;
+
+int tg_cg_events_parse(const char *buf, size_t len, struct tg_cg_events *out, uint64_t *found);
+
+/* ---------- cgroup v2 cgroup.stat ---------- */
+
+struct tg_cg_cgstat {
+    uint64_t nr_descendants;       /* 하위 cgroup 수. 컨테이너 시작·종료 감지용 */
+    uint64_t nr_dying_descendants;
+};
+
+extern const struct tg_kv_field tg_cg_cgstat_fields[];
+extern const size_t tg_cg_cgstat_nfields;
+
+int tg_cg_cgstat_parse(const char *buf, size_t len, struct tg_cg_cgstat *out, uint64_t *found);
+
 /* 0..n-1 비트가 모두 켜진 마스크. "필수 필드를 다 찾았는가" 검사에 쓴다. */
 static inline uint64_t tg_mask_all(size_t n)
 {

@@ -1,0 +1,10 @@
+[01:19:22] 결과 디렉터리: /mnt/c/thrash-guard/results/m1/20261111/stage6-repeat650/05-a650f0r4-5
+[01:19:22] VM 시작
+[01:19:34] VM 시작: run.qcow2, 메모리 1024 MiB, vCPU 2, I/O 상한 150 IOPS / 131072000 B/s
+[01:19:34] SSH 대기
+[01:20:34] 준비 완료: ssh -i /home/field/.ssh/tg_vm_ed25519 -p 2222 tg@127.0.0.1
+[01:20:51] 기준 구간 15초
+[01:21:06] 부하 시작: anon 650 MiB (4 MiB/s), file 0 MiB, 최대 1200초
+3077행 -> /mnt/c/thrash-guard/results/m1/20261111/stage6-repeat650/05-a650f0r4-5/samples.csv
+판정: livelock  (SSH 최장 무응답 601.0초, MemAvailable 최소 0.0 MiB, OOM kill 0건, 샘플 3075개)
+[01:33:49] 완료: /mnt/c/thrash-guard/results/m1/20261111/stage6-repeat650/05-a650f0r4-5

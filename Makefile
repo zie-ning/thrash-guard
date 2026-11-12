@@ -1,8 +1,9 @@
 # Thrash Guard 빌드
 #
-#   make                 # glibc 정적 링크로 tg-sampler, thrash-guard 빌드
+#   make                 # glibc 정적 링크로 tg-sampler, tg-load, thrash-guard 빌드
 #   make LIBC=musl       # musl 정적 링크 빌드 (musl-tools 필요)
 #   make test            # 단위 테스트 (ASan/UBSan, 동적 링크)
+#   make test-tsan       # 스레드 데이터 경쟁 검사 (ThreadSanitizer)
 #   make lint            # cppcheck 정적 분석
 #
 # libc 선택: glibc·musl 두 빌드를 모두 지원하고, M3에서 실측해 기본값을 고른다.
@@ -23,23 +24,29 @@ INC    := -Isrc/common -Isrc/daemon
 BUILD  := build/$(LIBC)
 TBUILD := build/test
 
-COMMON_SRC := src/common/procfs.c src/common/selfprot.c src/common/fmt.c
+COMMON_SRC := src/common/procfs.c src/common/selfprot.c src/common/fmt.c src/common/cgscan.c
 SAMPLER_SRC := src/sampler/main.c
+LOAD_SRC := workload/tg_load.c
 # 데몬 모듈. main.c를 뺀 나머지는 테스트에도 함께 링크한다.
 DAEMON_LIB_SRC := src/daemon/config.c src/daemon/policy.c src/daemon/targets.c \
                   src/daemon/scanner.c src/daemon/judge.c src/daemon/log.c
 DAEMON_SRC := src/daemon/main.c
 
 SAMPLER := $(BUILD)/tg-sampler
+LOAD    := $(BUILD)/tg-load
 DAEMON  := $(BUILD)/thrash-guard
 
 .PHONY: all test test-tsan lint clean
 
-all: $(SAMPLER) $(DAEMON)
+all: $(SAMPLER) $(LOAD) $(DAEMON)
 
 $(SAMPLER): $(COMMON_SRC) $(SAMPLER_SRC) $(wildcard src/common/*.h)
 	@mkdir -p $(@D)
 	$(CC) $(CSTD) $(WARN) $(CFLAGS) $(INC) -static -o $@ $(COMMON_SRC) $(SAMPLER_SRC)
+
+$(LOAD): $(LOAD_SRC)
+	@mkdir -p $(@D)
+	$(CC) $(CSTD) $(WARN) $(CFLAGS) -static -o $@ $(LOAD_SRC)
 
 $(DAEMON): $(COMMON_SRC) $(DAEMON_LIB_SRC) $(DAEMON_SRC) $(wildcard src/common/*.h src/daemon/*.h)
 	@mkdir -p $(@D)
@@ -50,8 +57,9 @@ $(DAEMON): $(COMMON_SRC) $(DAEMON_LIB_SRC) $(DAEMON_SRC) $(wildcard src/common/*
 TEST_CC ?= cc
 TEST_CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined \
                -fno-sanitize-recover=all -DTG_FIXTURE_DIR='"tests/fixtures"'
-TESTS := $(TBUILD)/test_procfs $(TBUILD)/test_fmt $(TBUILD)/test_config \
-         $(TBUILD)/test_policy $(TBUILD)/test_targets $(TBUILD)/test_judge $(TBUILD)/test_log
+TESTS := $(TBUILD)/test_procfs $(TBUILD)/test_fmt $(TBUILD)/test_cgscan \
+         $(TBUILD)/test_config $(TBUILD)/test_policy $(TBUILD)/test_targets \
+         $(TBUILD)/test_judge $(TBUILD)/test_log
 
 $(TBUILD)/test_%: tests/test_%.c $(COMMON_SRC) $(DAEMON_LIB_SRC) tests/tg_test.h \
                   $(wildcard src/common/*.h src/daemon/*.h)
@@ -60,6 +68,7 @@ $(TBUILD)/test_%: tests/test_%.c $(COMMON_SRC) $(DAEMON_LIB_SRC) tests/tg_test.h
 
 test: $(TESTS)
 	@set -e; for t in $(TESTS); do echo "== $$t"; ./$$t; done
+	python3 -m unittest discover -s tests -p 'test_*.py'
 
 # 스레드를 쓰는 모듈(로그 링버퍼, 스캔 스레드)의 데이터 경쟁 검사. ThreadSanitizer는
 # AddressSanitizer와 함께 쓸 수 없어 별도 빌드로 돌린다.
@@ -80,7 +89,7 @@ test-tsan: $(TSAN_TESTS)
 
 lint:
 	cppcheck --enable=warning,performance,portability --std=c11 --error-exitcode=1 \
-	    --inline-suppr --quiet -Isrc/common src tests
+	    --inline-suppr --quiet -Isrc/common src tests workload
 
 clean:
 	rm -rf build

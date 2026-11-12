@@ -13,3 +13,7 @@ __pycache__/
 # 편집기
 .vscode/
 *.swp
+
+# 측정 결과의 파생 파일 (samples.log에서 tg_to_csv.py로 다시 만들 수 있다)
+/results/m1/**/samples.csv
+/results/m1/**/cg.csv

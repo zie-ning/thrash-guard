@@ -94,3 +94,49 @@
 ## 4. PSI 트리거 실측 (M3 작업 중)
 
 **PSI 트리거 실측** (WSL 6.18, root): 윈도 상한 10초, 400 ms 윈도도 등록됨, stall이 윈도보다 크면 거부. **일반 사용자는 1초 윈도 등록이 거부되고 10초는 허용**되므로 데몬은 root(또는 `CAP_SYS_RESOURCE`)로 돌려야 한다(원인은 미확인). VM 6.8 커널에서의 경계는 M3-2에서 확인한다.
+
+## 5. 참고: M1 재현 판정 기록 (2026-11-10~11)
+
+**참고용 기록이다.** 이전 계획(길벗 재현 중심)에서 만든 도구와 측정이며, 현재의 설계([design/overview.md](../design/overview.md))와 검증 설계([validation/overview.md](../validation/overview.md))는 이 결과에 의존하지 않는다.
+원본 데이터는 `results/m1/`(`20261110`의 stage1~5, `20261111`의 stage6~12)에 있다. 아래 수치는 모두 이 VM(1 GiB, swap 없음) 기준의 실측이다.
+
+### 5.1 구성 요소
+
+| 구성 | 내용 |
+|---|---|
+| `workload/tg_load.c` (`tg-load`) | 합성 부하. 모드: `anon`(익명 메모리를 목표 크기까지 키우며 전체 무작위 접근), `file`(mmap 파일 무작위 읽기), `pin`(`mlock`으로 회수 불가 메모리 고정), `canary`(TCP 응답 서버, 메모리 보호 없음) |
+| `lab/run.sh` | 실행 하네스. 기준 시나리오 S1과 컨테이너 모사 시나리오 S2(`--scenario S2`). 판정이 확정되면 즉시 종료하고 QMP로 VM을 강제 종료한다 |
+| `lab/sweep.sh` | 조건 탐색. 조건 형식은 `anon,file,rate[,pin]` |
+| `lab/analyze/` | `verdict.py`(판정), `summary.py`, `s2_summary.py` |
+| `tg-sampler --cg-parent` | 부모 cgroup의 직계 하위 cgroup(최대 8개)을 `kind=cg` 줄로 함께 보낸다. 부모 `cgroup.stat`의 `nr_descendants`가 바뀌거나 읽기에 실패하면 다시 찾는다. VM에서 서비스 하나를 내렸다 새로 띄웠을 때 목록이 교체됨을 확인했다. Docker 컨테이너(`docker-<id>.scope`)로는 이미지가 없어 확인하지 못했다 |
+
+### 5.2 재현 판정
+
+판정은 세 갈래다: **oom_kill**, **livelock**, **normal**.
+
+- **livelock**: OOM kill 0건, SSH 성공이 한 번도 없는 구간이 10분 이상, 그 구간의 `MemAvailable`이 20 MiB 이하. 경계 조건은 normal로 분류하고 수치는 `verdict.json`에 남긴다.
+- **조기 종료**: anon이 목표 크기까지 다 자란 뒤 5분 동안 SSH 프로브가 한 번도 실패하지 않고 `MemAvailable`이 20 MiB를 넘는 상태가 유지되면 normal로 확정하고 끝낸다(`early_normal=true`로 표시). 하한은 처음 100 MiB였으나 550~650 MiB 실행이 조기 종료되지 못해 20 MiB로 낮췄다. 임계값은 임시값이며 5분 뒤에 늦게 시작되는 스래싱을 놓칠 수 있다(미확인).
+
+### 5.3 탐색과 결과
+
+- 단계적으로 탐색했다(anon 크기, file 크기, 증가 속도를 한 축씩). 탐색 지점은 1회씩 돌리고 후보에서만 5회 반복했다. 한 번의 부하는 최대 20분이다.
+- **같은 조건에서도 livelock과 OOM kill이 갈린다.** 예: 150 IOPS, anon 650 MiB 5회에서 livelock 3회, OOM kill 2회. 그래서 "5회 중 4회" 같은 합격선 대신 재현율을 N회 중 k회와 신뢰 범위로 보고한다.
+- **기준 조건(평가용 유도 조건)**: anon 650 MiB(4 MiB/s), file 0, mlock 43 MiB, I/O 상한 100 IOPS. **15회 중 9회 livelock(60%, 신뢰구간 약 33~83%).** 목표였던 80%에는 닿지 못했다.
+- 시도한 레버(I/O 상한 150에서 100, anon 650/700 MiB, mlock 43 MiB, file 50 MiB) 중 재현율을 구분 가능하게 올린 것은 없었다. **3000 IOPS에서는 약 20회 모두 livelock이 나오지 않아**, I/O 상한을 낮추는 것만 필수로 확인됐다.
+- 이 조건은 길벗 관측값(읽기 143~147 IOPS)보다 느린 **유도 조건**이고, mlock 43 MiB는 길벗의 unevictable 관측값을 모사한 것이다. 가장 높은 값은 650 MiB·150 IOPS의 4/6(67%)였지만 표본이 작아 구분되지 않아 표본이 큰 조건을 택했다.
+- 같은 조건에서 livelock과 OOM kill이 갈리는 이유는 **미확인**이다. 가설은 회수 효율이 낮을수록 OOM kill로 간다는 것이지만, 일부 실행은 이 가설로 설명되지 않는다.
+
+### 5.4 컨테이너 내부 스래싱 예비 확인 (S2, 현재 범위 밖)
+
+- 컨테이너는 Docker 대신 `workload.slice` 아래 `workload-container.slice`에 `MemoryMax`와 `MemorySwapMax`를 걸어 모사했다. swap 2 GiB, `swappiness=10`, VM 1 GiB, 컨테이너 상한 600 MiB, 부하 anon 800 MiB, 100 IOPS. 커널의 `min_ttl_ms`를 0과 1000으로 각각 3회 번갈아 측정했다(`results/m1/20261111/stage12-s2-minttl/`, 1000초 상한).
+- 6회 모두 `normal`이었다. 컨테이너 cgroup의 PSI `full`이 53~77%로 상한에 계속 걸렸지만 카나리 무응답이 10분에 미치지 못했고(최장 111초) OOM kill도 없었다.
+- 카나리 최장 무응답은 `min_ttl_ms=1000`에서 3~19초, 0에서 16~111초로 낮았지만 3회씩이라 범위가 겹쳐 결론을 내지 못한다.
+- 컨테이너 스래싱이 SSH 지연(최대 51초)과 시스템 `MemAvailable` 하락으로 번졌다. 원인은 미확인이다(가설: swap I/O가 같은 디스크를 공유).
+- 새 목적에서는 컨테이너 내부 스래싱을 범위 밖으로 두었으므로, 후속 확장 때 참고한다.
+
+### 5.5 남은 한계
+
+- 하네스가 복구(해소) 시간을 재지 않는다. `pin`의 `VmLck` 값이 샘플에 기록되지 않는다.
+- anon 접근 패턴은 전체 무작위만 구현했다. 스래싱이 가장 잘 생기는 최악 조건이며 길벗의 실제 패턴은 알 수 없다(미확인).
+- 초기 측정은 부하를 SSH로 직접 실행해 `workload.slice` 밖에서 돌았다(`cg_n=0`). 새 검증에서는 부하를 각각 별도 cgroup으로 실행한다.
+- livelock 판정 경로는 스모크 실행과 합성 데이터 단위 테스트로 먼저 확인했고, 이후 반복 측정에서 실제 livelock이 관측됐다.

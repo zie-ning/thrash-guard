@@ -42,7 +42,7 @@ args=(
     -no-reboot
     -m "$VM_MEM_MB" -smp "$VM_CPUS"
     -drive "$drive" -device virtio-blk-pci,drive=d0
-    -netdev "user,id=n0,hostfwd=tcp:127.0.0.1:$SSH_PORT-:22"
+    -netdev "user,id=n0,hostfwd=tcp:127.0.0.1:$SSH_PORT-:22,hostfwd=tcp:127.0.0.1:$CANARY_PORT-:$CANARY_PORT"
     -device virtio-net-pci,netdev=n0
     -display none
     -serial "file:$(winpath "$IMG_DIR")\\serial.log"

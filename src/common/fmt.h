@@ -28,4 +28,7 @@ void tg_buf_i64(struct tg_buf *b, int64_t v);
 void tg_buf_kv_u64(struct tg_buf *b, const char *key, uint64_t v);
 void tg_buf_kv_i64(struct tg_buf *b, const char *key, int64_t v);
 
+/* 값은 공백이 없는 문자열이어야 한다(호출자가 보장). */
+void tg_buf_kv_str(struct tg_buf *b, const char *key, const char *v);
+
 #endif /* TG_FMT_H */
