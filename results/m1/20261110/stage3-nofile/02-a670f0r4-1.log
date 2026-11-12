@@ -1,0 +1,10 @@
+[18:59:12] 결과 디렉터리: /mnt/c/thrash-guard/results/m1/20261110/stage3-nofile/02-a670f0r4-1
+[18:59:12] VM 시작
+[18:59:23] VM 시작: run.qcow2, 메모리 1024 MiB, vCPU 2, I/O 상한 3000 IOPS / 131072000 B/s
+[18:59:23] SSH 대기
+[18:59:39] 준비 완료: ssh -i /home/field/.ssh/tg_vm_ed25519 -p 2222 tg@127.0.0.1
+[18:59:42] 기준 구간 15초
+[18:59:57] 부하 시작: anon 670 MiB (4 MiB/s), file 0 MiB, 최대 1200초
+5015행 -> /mnt/c/thrash-guard/results/m1/20261110/stage3-nofile/02-a670f0r4-1/samples.csv
+판정: normal  (SSH 최장 무응답 4.8초, MemAvailable 최소 0.0 MiB, OOM kill 0건, 샘플 5012개)
+[19:20:40] 완료: /mnt/c/thrash-guard/results/m1/20261110/stage3-nofile/02-a670f0r4-1

@@ -76,3 +76,9 @@ void tg_buf_kv_i64(struct tg_buf *b, const char *key, int64_t v)
     kv_prefix(b, key);
     tg_buf_i64(b, v);
 }
+
+void tg_buf_kv_str(struct tg_buf *b, const char *key, const char *v)
+{
+    kv_prefix(b, key);
+    tg_buf_str(b, v);
+}

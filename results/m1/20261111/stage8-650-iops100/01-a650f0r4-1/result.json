@@ -1,0 +1,29 @@
+{
+  "id": "a650f0r4",
+  "scenario": "S1",
+  "load": {
+    "anon_mib": 650,
+    "rate_mib_s": 4,
+    "file_mib": 0,
+    "pin_mib": 0,
+    "pattern": "random"
+  },
+  "io_limit": {
+    "iops": 100,
+    "bytes_per_sec": 131072000
+  },
+  "max_sec": 1200,
+  "baseline_sec": 15,
+  "load_start_unix_ns": 1794331979000301241,
+  "result": {
+    "verdict": "livelock",
+    "early_normal": false,
+    "ssh_max_gap_s": 602.0,
+    "ssh_probes": 818,
+    "ssh_ok": 185,
+    "mem_avail_min_mib": 0.0,
+    "mem_avail_min_mib_in_gap": 0.0,
+    "oom_kill_delta": 0,
+    "samples": 3127
+  }
+}

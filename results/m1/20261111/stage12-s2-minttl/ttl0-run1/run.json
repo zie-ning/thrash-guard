@@ -1,0 +1,26 @@
+{
+  "id": "s2-ttl0-1",
+  "scenario": "S2",
+  "load": {
+    "anon_mib": 800,
+    "rate_mib_s": 4,
+    "file_mib": 0,
+    "pin_mib": 0,
+    "pattern": "random"
+  },
+  "io_limit": {
+    "iops": 100,
+    "bytes_per_sec": 131072000
+  },
+  "kernel": {
+    "min_ttl_ms": 0
+  },
+  "container": {
+    "limit_mib": 600,
+    "swap_mib": 2048,
+    "swappiness": 10
+  },
+  "max_sec": 1000,
+  "baseline_sec": 15,
+  "load_start_unix_ns": 1794377262210814780
+}

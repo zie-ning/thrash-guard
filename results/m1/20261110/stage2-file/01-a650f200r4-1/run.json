@@ -1,0 +1,13 @@
+{
+  "id": "a650f200r4",
+  "scenario": "S1",
+  "load": {
+    "anon_mib": 650,
+    "rate_mib_s": 4,
+    "file_mib": 200,
+    "pattern": "random"
+  },
+  "max_sec": 1200,
+  "baseline_sec": 15,
+  "load_start_unix_ns": 1794300671572619794
+}
