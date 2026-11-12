@@ -191,7 +191,7 @@ struct tg_buf b;
 if (tg_log_begin(&log, TG_LOG_INFO, &b)) {
     tg_buf_str(&b, "judge kill cand=");
     tg_buf_str(&b, name);
-    tg_buf_kv_u64(&b, "zone_avg_x100", d.zone_avg_x100);
+    tg_buf_kv_u64(&b, "sys_avg_x100", d.sys_avg_x100);
     tg_log_end(&log, &b);
 }
 ```

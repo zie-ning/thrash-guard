@@ -40,6 +40,9 @@ struct tg_config {
     uint32_t full_pct;           /* X */
     uint32_t sustain_sec;        /* N */
     uint32_t sample_interval_ms; /* 샘플 주기. sustain_sec 안에 정수 번 들어가야 한다 */
+    uint32_t mem_avail_pct;      /* Y: MemAvailable이 전체의 이 비율 이하일 때만 종료한다 */
+    uint32_t min_size_pct;       /* 후보 자격: 윈도 안 최대 사용량이 전체의 이 비율 이상 */
+    uint32_t min_growth_pct;     /* 증가 인정: 윈도 안 증가량이 전체의 이 비율 이상 */
 
     /* 안전장치 */
     uint32_t startup_grace_sec;

@@ -2,20 +2,25 @@
  * judge.h - 스래싱 판단 (순수 함수)
  *
  * "지금 스래싱인가, 맞다면 누구를 종료할까, 지금 종료해도 되는가"를 결정한다.
- * 파일을 읽거나 종료를 실행하지 않는다. 호출자가 숫자(누적 카운터와 시각)를 넘기고
- * 결정을 받는다. 그래서 실제 시계나 /proc 없이 단위 테스트와 리플레이가 가능하다.
+ * 파일을 읽거나 종료를 실행하지 않는다. 호출자가 숫자(누적 카운터, 메모리 양, 시각)를 넘기고
+ * 결정을 받는다. 그래서 실제 시계나 /proc 없이 단위 테스트가 가능하다.
  * 힙 할당을 하지 않는다. 상태는 모두 이 구조체 안의 고정 배열이다.
+ * 규칙의 이유는 docs/design/overview.md와 docs/design/victim-selection.md에 있다.
  *
  * 흐름:
  *   대기 -- tg_judge_trigger --> 관찰
- *   관찰: 샘플마다 구역(target_parent)과 후보별 증가분을 최근 N초 윈도에 쌓는다.
- *     - 구역 평균 full < X/2          -> 대기로 복귀 (CALM)
- *     - X/2 <= 평균 < X               -> 계속 관찰
- *     - 평균 >= X                     -> 후보 선택
- *         유예 중이거나 윈도가 덜 찬 후보는 제외하고, 평균 full >= X인 후보 중
- *         pgscan 증가량이 가장 큰 것을 고른다. 동률이면 메모리 사용량, 그래도 같으면 앞 번호.
- *         후보가 없거나 자격 미달이면 건너뜀, 쿨다운·시간당 상한에 걸리면 건너뜀,
- *         통과하면 종료 결정을 내고 대기로 복귀한다.
+ *   관찰: 샘플마다 시스템 full 증가분과 후보별 사용량을 최근 N초 윈도에 쌓는다.
+ *     - 시스템 평균 full < X/2         -> 대기로 복귀 (CALM)
+ *     - X/2 <= 평균 < X                -> 계속 관찰
+ *     - 평균 >= X                      -> MemAvailable이 전체의 Y% 이하인지 확인
+ *         Y% 초과면 건너뜀(MEM_AVAILABLE). 이하면 후보를 고른다.
+ *   후보 선택:
+ *     제외: 보호된 후보, 유예 중인 후보, 윈도가 덜 찬 후보
+ *     자격: 윈도 안 최대 사용량이 전체 메모리의 min_size_pct 이상
+ *     순위: 증가량(최대 - 윈도 첫 샘플)이 전체의 min_growth_pct 이상인 후보 중 증가량이 가장 큰 것.
+ *           없으면 최대 사용량이 가장 큰 것. 동률이면 샘플 후보 배열에서 앞에 있는 것.
+ *     자격 있는 후보가 없으면 건너뜀(NO_CULPRIT), 쿨다운·시간당 상한에 걸리면 건너뜀,
+ *     통과하면 종료 결정을 내고 대기로 복귀한다.
  *
  * 평균 full 비율은 윈도 안의 실제 경과 시간으로 나눈다(샘플 간격이 흔들려도 정확하도록).
  * 비율은 100배한 정수다. 예: 12.34% -> 1234.
@@ -30,7 +35,7 @@
 #include "policy.h"
 #include "targets.h"
 
-/* 최근 n칸의 증가분을 담는 고정 배열 윈도 */
+/* 최근 n칸의 증가분을 담는 고정 배열 윈도 (시스템 full, 샘플 간 경과 시간) */
 struct tg_win {
     uint32_t v[TG_MAX_WINDOW_SAMPLES];
     uint64_t sum;
@@ -38,23 +43,27 @@ struct tg_win {
     uint32_t filled;
 };
 
+/* 최근 n칸의 후보 사용량(KiB). 칸이 다 차면 head가 가장 오래된 값이다 */
+struct tg_memwin {
+    uint32_t kib[TG_MAX_WINDOW_SAMPLES];
+    uint32_t head;
+    uint32_t filled;
+};
+
 struct tg_judge_slot {
     bool used;
     char name[TG_TARGET_NAME_CAP];
-    bool has_prev;
-    uint64_t prev_full_us;
-    uint64_t prev_pgscan;
-    struct tg_win full; /* 샘플당 full stall 증가분(us) */
-    struct tg_win scan; /* 샘플당 pgscan 증가분(페이지) */
+    struct tg_memwin mem;
 };
 
 enum tg_judge_reason {
     TG_R_NONE = 0,
-    TG_R_CALM,           /* 압력이 가라앉아 관찰을 끝냈다 */
-    TG_R_NO_CANDIDATE,   /* 판단할 수 있는 후보가 없다 (유예 중이거나 윈도가 덜 참) */
-    TG_R_NO_CULPRIT,     /* 후보는 있으나 평균 full이 X 미만이라 책임을 물을 수 없다 */
-    TG_R_COOLDOWN,       /* 쿨다운 중 */
-    TG_R_HOURLY_LIMIT,   /* 시간당 상한 도달 */
+    TG_R_CALM,          /* 압력이 가라앉아 관찰을 끝냈다 */
+    TG_R_MEM_AVAILABLE, /* 압력은 높지만 MemAvailable이 아직 충분하다 */
+    TG_R_NO_CANDIDATE,  /* 판단할 수 있는 후보가 없다 (보호·유예·윈도 덜 참) */
+    TG_R_NO_CULPRIT,    /* 후보는 있으나 모두 자격(최소 사용량) 미달이다 */
+    TG_R_COOLDOWN,      /* 쿨다운 중 */
+    TG_R_HOURLY_LIMIT,  /* 시간당 상한 도달 */
 };
 
 enum tg_judge_kind {
@@ -64,41 +73,45 @@ enum tg_judge_kind {
     TG_J_KILL,     /* cand_index의 후보를 종료하라 */
 };
 
-/* 후보 한 개의 이번 샘플 기준 지표. 로그와 사후 비교용 */
+/* 후보 한 개의 이번 샘플 기준 지표. 로그와 사후 점검용 */
 struct tg_cand_stat {
-    bool ready;            /* 윈도가 가득 찼다 */
-    bool in_grace;         /* 유예 중 */
-    bool eligible;         /* ready && !in_grace && 평균 full >= X */
-    uint32_t full_avg_x100;
-    uint64_t pgscan_delta; /* 윈도 안의 pgscan 증가량 */
-    uint64_t mem_bytes;
+    bool ready;      /* 윈도가 가득 찼다 */
+    bool in_grace;   /* 유예 중 */
+    bool is_protected;
+    bool eligible;   /* ready && !유예 && !보호 && 최대 사용량 >= 최소 */
+    bool growing;    /* 증가량 >= 최소 증가 */
+    uint64_t max_bytes;    /* 윈도 안 최대 사용량. ready가 아니면 0 */
+    uint64_t growth_bytes; /* 최대 - 윈도 첫 샘플. ready가 아니면 0 */
 };
 
 struct tg_decision {
     enum tg_judge_kind kind;
     enum tg_judge_reason reason;
-    int32_t cand_index;        /* KILL일 때 샘플 후보 배열의 번호, 아니면 -1 */
-    uint32_t zone_avg_x100;    /* 구역 평균 full. 윈도가 덜 찼으면 0 */
-    uint32_t cand_avg_x100;    /* KILL일 때 선택된 후보의 평균 full */
-    uint64_t cand_pgscan_delta;
-    uint64_t cand_mem_bytes;
+    int32_t cand_index;      /* KILL일 때 샘플 후보 배열의 번호, 아니면 -1 */
+    uint32_t sys_avg_x100;   /* 시스템 평균 full. 윈도가 덜 찼으면 0 */
+    uint32_t avail_x100;     /* MemAvailable / 전체 메모리 (100배한 %). 확인 전이면 0 */
+    uint64_t cand_max_bytes; /* KILL일 때 선택된 후보의 값 */
+    uint64_t cand_growth_bytes;
+    bool cand_growing;
 };
 
 struct tg_judge {
     /* 설정 복사본 */
     uint32_t nsamples;
     uint32_t full_pct;
+    uint32_t mem_avail_pct;
+    uint32_t min_size_pct;
+    uint32_t min_growth_pct;
     uint32_t grace_sec;
 
     bool watching;
-    uint64_t epoch;
     enum tg_judge_reason last_skip;
 
-    bool zone_has_prev;
-    uint64_t zone_prev_total_us;
-    uint64_t zone_prev_now_ns;
-    struct tg_win zone_full; /* 구역 full stall 증가분(us) */
-    struct tg_win zone_dt;   /* 샘플 간 경과 시간(us) */
+    bool sys_has_prev;
+    uint64_t sys_prev_total_us;
+    uint64_t sys_prev_now_ns;
+    struct tg_win sys_full; /* 시스템 full stall 증가분(us) */
+    struct tg_win sys_dt;   /* 샘플 간 경과 시간(us) */
 
     struct tg_judge_slot slot[TG_MAX_TARGETS];
 
@@ -109,20 +122,21 @@ struct tg_judge {
 /* 샘플 한 개 안의 후보 한 개 */
 struct tg_cand_sample {
     const char *name;
-    uint64_t full_total_us; /* 후보 memory.pressure full total */
-    uint64_t pgscan;        /* 후보 memory.stat pgscan 누적 */
-    uint64_t mem_bytes;     /* 후보 메모리 사용량 */
+    uint64_t mem_bytes;     /* 후보 메모리 사용량(anon + file) */
     uint64_t first_seen_ns; /* tg_target.first_seen_ns */
+    bool is_protected;      /* 보호된 cgroup이면 후보에서 뺀다 */
 };
 
 struct tg_sample {
     uint64_t now_ns;
-    uint64_t zone_full_total_us; /* target_parent memory.pressure full total */
+    uint64_t sys_full_total_us;  /* /proc/pressure/memory full total */
+    uint64_t mem_available_bytes;
+    uint64_t mem_total_bytes;
     const struct tg_cand_sample *cand;
     uint32_t ncand;
 };
 
-/* cfg에서 sustain_sec, sample_interval_ms, full_pct, startup_grace_sec를 복사한다. */
+/* cfg에서 판단에 쓰는 값(윈도 칸 수, 임계, 자격, 유예)을 복사한다. */
 void tg_judge_init(struct tg_judge *j, const struct tg_config *cfg);
 
 /* 커널 트리거가 발화했다. 대기 중이면 관찰을 시작한다. 관찰 중이면 무시한다. */
