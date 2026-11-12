@@ -66,6 +66,7 @@ enum tg_judge_reason {
     TG_R_NONE = 0,
     TG_R_CALM,          /* 압력이 가라앉아 관찰을 끝냈다 */
     TG_R_MEM_AVAILABLE, /* 압력은 높지만 MemAvailable이 아직 충분하다 */
+    TG_R_STALE_TARGETS, /* 후보 표의 보호 상태가 너무 낡았다. 종료하지 않는다 */
     TG_R_NO_CANDIDATE,  /* 판단할 수 있는 후보가 없다 (보호·유예·윈도 덜 참) */
     TG_R_NO_CULPRIT,    /* 후보는 있으나 모두 자격(최소 사용량) 미달이다 */
     TG_R_COOLDOWN,      /* 쿨다운 중 */
@@ -140,6 +141,7 @@ struct tg_sample {
     uint64_t sys_full_total_us;  /* /proc/pressure/memory full total */
     uint64_t mem_available_bytes;
     uint64_t mem_total_bytes;
+    bool targets_stale; /* 후보 표를 마지막으로 계산한 지 너무 오래됐다 */
     const struct tg_cand_sample *cand;
     uint32_t ncand;
 };

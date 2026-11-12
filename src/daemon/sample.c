@@ -87,7 +87,7 @@ int tg_sample_collect(struct tg_reader *r, const struct tg_targets *t, uint64_t 
         out->cand[n].name = t->t[i].name;
         out->cand[n].mem_bytes = bytes;
         out->cand[n].first_seen_ns = t->t[i].first_seen_ns;
-        out->cand[n].is_protected = false;
+        out->cand[n].is_protected = t->t[i].protect != 0; /* 확인하지 못한 것도 보호로 다룬다 */
         n++;
     }
 
@@ -95,6 +95,8 @@ int tg_sample_collect(struct tg_reader *r, const struct tg_targets *t, uint64_t 
     out->s.sys_full_total_us = psi.full.total_us;
     out->s.mem_available_bytes = mi.mem_available_kb * 1024;
     out->s.mem_total_bytes = mi.mem_total_kb * 1024;
+    out->s.targets_stale = t->scanned_ns == 0 ||
+                           (now_ns > t->scanned_ns && now_ns - t->scanned_ns > TG_TARGETS_STALE_NS);
     out->s.cand = out->cand;
     out->s.ncand = n;
     return 0;

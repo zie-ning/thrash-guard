@@ -9,7 +9,11 @@
 #include <string.h>
 #include <time.h>
 
+#include <fcntl.h>
+#include <unistd.h>
+
 #include "mono.h"
+#include "protect.h"
 
 /* stop 요청에 빨리 반응하도록 잘게 나눠 잔다. */
 static void sleep_ms_until_stop(struct tg_scanner *s, uint32_t ms)
@@ -42,7 +46,14 @@ static void *scan_main(void *arg)
         if (atomic_load(&s->in_use) == nxt)
             continue;
 
-        rc = tg_targets_rebuild(&s->tbl[nxt], &s->tbl[cur], s->parent, tg_now_ns(), false);
+        {
+            uint64_t now = tg_now_ns();
+
+            rc = tg_targets_rebuild(&s->tbl[nxt], &s->tbl[cur], s->parent, now, false);
+            /* 보호 상태까지 계산해야 공개한다. 실패하면 표가 낡아 가고 엔진이 종료를 막는다 */
+            if (rc == 0)
+                rc = tg_targets_mark(&s->tbl[nxt], s->proc_fd, s->parent, now);
+        }
         if (rc == 0) {
             atomic_store(&s->current, nxt);
             atomic_fetch_add(&s->scans, 1);
@@ -74,9 +85,22 @@ int tg_scanner_start(struct tg_scanner *s, const char *parent, uint32_t interval
     memcpy(s->parent, parent, plen + 1);
     s->interval_ms = interval_ms;
 
-    rc = tg_targets_rebuild(&s->tbl[0], NULL, s->parent, tg_now_ns(), true);
-    if (rc != 0)
+    s->proc_fd = open("/proc", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (s->proc_fd < 0)
+        return -errno;
+    {
+        uint64_t now = tg_now_ns();
+
+        rc = tg_targets_rebuild(&s->tbl[0], NULL, s->parent, now, true);
+        if (rc == 0)
+            rc = tg_targets_mark(&s->tbl[0], s->proc_fd, s->parent, now);
+    }
+    if (rc != 0) {
+        tg_targets_release(&s->tbl[0], NULL);
+        close(s->proc_fd);
+        s->proc_fd = -1;
         return rc;
+    }
 
     rc = pthread_attr_init(&attr);
     if (rc == 0) {
@@ -87,6 +111,8 @@ int tg_scanner_start(struct tg_scanner *s, const char *parent, uint32_t interval
     }
     if (rc != 0) {
         tg_targets_release(&s->tbl[0], NULL);
+        close(s->proc_fd);
+        s->proc_fd = -1;
         return -rc;
     }
     s->started = true;
@@ -124,4 +150,7 @@ void tg_scanner_stop(struct tg_scanner *s)
     cur = atomic_load(&s->current);
     tg_targets_release(&s->tbl[1 - cur], &s->tbl[cur]);
     tg_targets_release(&s->tbl[cur], NULL);
+    if (s->proc_fd >= 0)
+        close(s->proc_fd);
+    s->proc_fd = -1;
 }

@@ -33,6 +33,7 @@ struct tg_scanner {
     bool started;
     char parent[TG_CFG_PATH_CAP];
     uint32_t interval_ms;
+    int proc_fd; /* /proc 디렉터리. 보호 상태 계산에 쓴다 */
 };
 
 /*

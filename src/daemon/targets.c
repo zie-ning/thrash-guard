@@ -61,6 +61,7 @@ void tg_targets_release(struct tg_targets *t, const struct tg_targets *keep)
     }
     t->n = 0;
     t->skipped = 0;
+    t->scanned_ns = 0;
 }
 
 /* dfd 아래 "name/file"을 연다. */
@@ -144,6 +145,7 @@ static void add_entry(struct tg_targets *next, const struct tg_targets *cur, int
     e->pressure_fd = pfd;
     e->current_fd = sfd;
     e->first_seen_ns = initial ? 0 : now_ns;
+    e->protect = 0;
 }
 
 /* 디렉터리를 한 번 훑는다. */
