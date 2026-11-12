@@ -162,6 +162,65 @@ static void test_checked_identity(void)
     close(dfd);
 }
 
+static void touch_in(const char *dir, const char *file)
+{
+    char path[256];
+    int fd;
+
+    snprintf(path, sizeof(path), "%s/%s/%s", root, dir, file);
+    fd = open(path, O_WRONLY | O_CREAT, 0600);
+    TG_CHECK(fd >= 0);
+    if (fd >= 0)
+        close(fd);
+}
+
+static void test_same_name_recreated(void)
+{
+    int dfd = open(root, O_RDONLY | O_DIRECTORY);
+    char from[256];
+    char to[256];
+    char path[256];
+    char buf[8];
+    int ref;
+
+    /* 샘플링할 때 e.scope의 memory.current를 열어 둔다 */
+    mk_cg("e.scope", true);
+    touch_in("e.scope", "memory.current");
+    snprintf(path, sizeof(path), "%s/e.scope/memory.current", root);
+    ref = open(path, O_RDONLY);
+    TG_CHECK(ref >= 0);
+
+    /*
+     * 같은 이름으로 cgroup이 다시 만들어진 상황: 새 cgroup을 먼저 만든 뒤(inode가 겹치지 않는다)
+     * 옛 것을 치우고 같은 이름을 쓴다.
+     */
+    mk_cg("e.new", true);
+    touch_in("e.new", "memory.current");
+    snprintf(from, sizeof(from), "%s/e.scope", root);
+    snprintf(to, sizeof(to), "%s/e.old", root);
+    TG_CHECK(rename(from, to) == 0);
+    snprintf(from, sizeof(from), "%s/e.new", root);
+    snprintf(to, sizeof(to), "%s/e.scope", root);
+    TG_CHECK(rename(from, to) == 0);
+
+    /* 옛 fd로는 같은 이름의 새 cgroup을 종료하지 않는다 */
+    TG_CHECK(tg_kill_cgroup_checked(dfd, "e.scope", ref) == -ESTALE);
+    read_kill_file("e.scope", buf, sizeof(buf));
+    TG_CHECK(strcmp(buf, "") == 0);
+
+    /* 새 cgroup에서 다시 연 fd로는 종료한다 */
+    close(ref);
+    snprintf(path, sizeof(path), "%s/e.scope/memory.current", root);
+    ref = open(path, O_RDONLY);
+    TG_CHECK(ref >= 0);
+    TG_CHECK(tg_kill_cgroup_checked(dfd, "e.scope", ref) == 0);
+    read_kill_file("e.scope", buf, sizeof(buf));
+    TG_CHECK(strcmp(buf, "1") == 0);
+
+    close(ref);
+    close(dfd);
+}
+
 int main(void)
 {
     snprintf(root, sizeof(root), "/tmp/tg_killer_XXXXXX");
@@ -176,6 +235,7 @@ int main(void)
     TG_RUN(test_bad_names);
     TG_RUN(test_symlink_kill_file_refused);
     TG_RUN(test_checked_identity);
+    TG_RUN(test_same_name_recreated);
 
     {
         char cmd[200];
