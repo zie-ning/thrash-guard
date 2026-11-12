@@ -10,7 +10,7 @@
 #
 # 사용법: lab/run.sh [옵션]
 #   --id NAME         실행 이름(결과 디렉터리 이름에 붙는다, 기본 run)
-#   --scenario S1|S2  시나리오. S1: swap 없음, 컨테이너 제한 없음. S2: swap + 컨테이너 메모리 상한(D23)
+#   --scenario S1|S2  시나리오. S1: swap 없음, 컨테이너 제한 없음. S2: swap + 컨테이너 메모리 상한
 #   --cg-limit-mib N  S2 컨테이너 메모리 상한(기본 600). MemorySwapMax도 같은 값으로 둔다
 #   --swap-mib N      S2 swap 크기(기본 2048)
 #   --swappiness N    S2 vm.swappiness(기본 10)

@@ -1,5 +1,5 @@
 #!/bin/bash
-# lab/vm 공용 설정 (D1: Windows QEMU + WHPX, WSL에서 조종)
+# lab/vm 공용 설정 (Windows QEMU + WHPX, WSL에서 조종)
 #
 # WSL은 mirrored 네트워크 모드여야 한다. 그래야 WSL의 127.0.0.1이 Windows와 공유되어
 # QEMU의 SSH 포워딩·QMP 포트에 바로 접속할 수 있다.

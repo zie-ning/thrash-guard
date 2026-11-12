@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""tg-sampler가 UDP로 보낸 줄을 받아 파일에 저장한다 (D5).
+"""tg-sampler가 UDP로 보낸 줄을 받아 파일에 저장한다 .
 
 VM 밖(WSL)에서 실행한다. 받은 줄 앞에 수신 시각(유닉스 나노초)을 붙여 그대로 기록한다.
 원본을 손대지 않고 남겨 두고, CSV 변환과 분석은 나중 단계(lab/analyze)에서 한다.

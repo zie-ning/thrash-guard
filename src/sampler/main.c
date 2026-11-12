@@ -2,7 +2,7 @@
  * tg-sampler - 스래싱 중에도 버티는 메모리 지표 수집기
  *
  * 일정 주기로 /proc/pressure/memory, /proc/vmstat, /proc/meminfo를 읽어
- * 한 줄짜리 텍스트로 만들고, UDP로 VM 밖 수신기에 보낸다(D5).
+ * 한 줄짜리 텍스트로 만들고, UDP로 VM 밖 수신기에 보낸다.
  * 디스크에는 쓰지 않는다. 스래싱 중 디스크는 가장 막히는 자원이기 때문이다.
  *
  * 초기화가 끝난 뒤의 루프(핵심 경로)는 힙 할당과 stdio를 쓰지 않는다.
@@ -15,7 +15,7 @@
  *   skipped : 늦어져서 건너뛴 주기 수(누적)
  *   err     : 읽기 실패 비트 (1 PSI, 2 vmstat, 4 meminfo)
  *
- * --cg-parent를 주면 부모 cgroup의 직계 하위(컨테이너)마다 줄을 하나씩 더 보낸다(D12).
+ * --cg-parent를 주면 부모 cgroup의 직계 하위(컨테이너)마다 줄을 하나씩 더 보낸다.
  *   tg1 kind=cg sseq=.. mono_us=.. idx=.. name=.. err=.. psi_some_total=.. psi_full_total=.. anon=.. ...
  *
  *   sseq    : 같은 시각의 kind=sample 줄의 seq. 수신기의 누락 검사가 seq=만 보므로 이름을 달리했다
