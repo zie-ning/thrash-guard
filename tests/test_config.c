@@ -238,6 +238,23 @@ static void test_validate(void)
     TG_CHECK(tg_config_validate(&c, &e) == 0);
 }
 
+static void test_validate_zero(void)
+{
+    struct tg_config c;
+    struct tg_cfg_err e;
+
+    /* 구조체를 직접 채워도 0으로 나누지 않고 거부한다 */
+    tg_config_defaults(&c);
+    c.sample_interval_ms = 0;
+    TG_CHECK(tg_config_validate(&c, &e) == -EINVAL);
+    TG_CHECK(strcmp(e.key, "sample_interval_ms") == 0);
+
+    tg_config_defaults(&c);
+    c.sustain_sec = 0;
+    TG_CHECK(tg_config_validate(&c, &e) == -EINVAL);
+    TG_CHECK(strcmp(e.key, "sustain_sec") == 0);
+}
+
 static void test_load(void)
 {
     struct tg_config c;
@@ -272,6 +289,7 @@ int main(void)
     TG_RUN(test_bad_syntax);
     TG_RUN(test_dry_run_policy);
     TG_RUN(test_validate);
+    TG_RUN(test_validate_zero);
     TG_RUN(test_load);
     return tg_test_finish();
 }

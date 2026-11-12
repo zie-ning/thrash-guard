@@ -332,6 +332,15 @@ int tg_config_validate(const struct tg_config *cfg, struct tg_cfg_err *err)
         set_key(err, "trigger_stall_us", strlen("trigger_stall_us"));
         return fail(err, -EINVAL, "trigger_window_us보다 클 수 없다");
     }
+    /* 구조체를 직접 채운 호출자도 0으로 나누지 않도록 먼저 막는다(파일 파서는 범위로 이미 거부한다). */
+    if (cfg->sustain_sec == 0) {
+        set_key(err, "sustain_sec", strlen("sustain_sec"));
+        return fail(err, -EINVAL, "0일 수 없다");
+    }
+    if (cfg->sample_interval_ms == 0) {
+        set_key(err, "sample_interval_ms", strlen("sample_interval_ms"));
+        return fail(err, -EINVAL, "0일 수 없다");
+    }
     if ((cfg->sustain_sec * 1000u) % cfg->sample_interval_ms != 0) {
         set_key(err, "sample_interval_ms", strlen("sample_interval_ms"));
         return fail(err, -EINVAL, "sustain_sec 안에 정수 번 들어가야 한다");

@@ -501,7 +501,8 @@ static void test_start_fallback(void)
     int tmp;
 
     tg_config_defaults(&cfg);
-    snprintf(cfg.log_path, sizeof(cfg.log_path), "/nonexistent_dir_tg/x.log");
+    /* 환경에 따라 달라지지 않도록, 방금 만든 임시 디렉터리 아래 만들지 않은 하위 디렉터리를 쓴다 */
+    snprintf(cfg.log_path, sizeof(cfg.log_path), "%s/no_such_dir/x.log", tmpdir);
 
     /* 표준 오류를 임시 파일로 돌려 대체 동작을 관찰한다 */
     snprintf(path, sizeof(path), "%s/stderr.txt", tmpdir);
@@ -525,6 +526,42 @@ static void test_start_fallback(void)
     TG_CHECK(strstr(text, "log_path 열기 실패 errno=2, 표준 오류 사용") != NULL);
     TG_CHECK(strstr(text, "still logging") != NULL);
     unlink(path);
+}
+
+static void test_start_fifo_without_reader(void)
+{
+    struct tg_log l;
+    struct tg_config cfg;
+    char path[128];
+    char errpath[128];
+    int saved;
+    int tmp;
+    int rc;
+
+    tg_config_defaults(&cfg);
+    snprintf(path, sizeof(path), "%s/fifo", tmpdir);
+    TG_CHECK(mkfifo(path, 0600) == 0);
+    snprintf(cfg.log_path, sizeof(cfg.log_path), "%s", path);
+
+    snprintf(errpath, sizeof(errpath), "%s/stderr_fifo.txt", tmpdir);
+    tmp = open(errpath, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    saved = dup(STDERR_FILENO);
+    TG_CHECK(tmp >= 0 && saved >= 0);
+    dup2(tmp, STDERR_FILENO);
+    close(tmp);
+
+    /* 독자 없는 FIFO를 열 때 멈추면 안 된다. 멈추면 5초 뒤 알람(SIGALRM)으로 테스트가 실패한다. */
+    alarm(5);
+    rc = tg_log_start(&l, &cfg);
+    alarm(0);
+    TG_CHECK(rc == 0);
+    TG_CHECK(l.fell_back);
+    tg_log_stop(&l);
+
+    dup2(saved, STDERR_FILENO);
+    close(saved);
+    unlink(path);
+    unlink(errpath);
 }
 
 static void test_stop_idempotent(void)
@@ -564,6 +601,7 @@ int main(void)
     TG_RUN(test_no_stuck_line);
     TG_RUN(test_start_file);
     TG_RUN(test_start_fallback);
+    TG_RUN(test_start_fifo_without_reader);
     TG_RUN(test_stop_idempotent);
 
     rmdir(tmpdir);

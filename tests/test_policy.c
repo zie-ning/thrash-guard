@@ -23,8 +23,10 @@ static void test_grace(void)
     /* 유예 0초면 발견 즉시 대상 */
     TG_CHECK(!tg_policy_in_grace(SEC(100), SEC(100), 0));
 
-    /* 데몬 시작 때 있던 항목(first_seen=0)은 부팅 30초 뒤부터 유예가 끝난 것으로 본다 */
+    /* 데몬 시작 때 있던 항목(first_seen=0)은 부팅 직후에도 유예를 면제한다 */
     TG_CHECK(!tg_policy_in_grace(0, SEC(3600), 30));
+    TG_CHECK(!tg_policy_in_grace(0, SEC(5), 30));
+    TG_CHECK(!tg_policy_in_grace(0, 0, 30));
 }
 
 static void test_cooldown(void)

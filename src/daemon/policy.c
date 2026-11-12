@@ -54,6 +54,9 @@ void tg_policy_record_kill(struct tg_policy *p, uint64_t now_ns)
 /* 핵심 경로: 할당 금지 */
 bool tg_policy_in_grace(uint64_t first_seen_ns, uint64_t now_ns, uint32_t grace_sec)
 {
+    /* 데몬 시작 때 이미 있던 항목은 나이를 알 수 없어 시각과 상관없이 유예를 면제한다. */
+    if (first_seen_ns == 0)
+        return false;
     if (now_ns < first_seen_ns)
         return true;
     return now_ns - first_seen_ns < (uint64_t)grace_sec * NS_PER_SEC;

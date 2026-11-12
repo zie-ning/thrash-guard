@@ -41,7 +41,7 @@ void tg_policy_record_kill(struct tg_policy *p, uint64_t now_ns);
 /*
  * 컨테이너가 처음 발견된 지 grace_sec이 지나지 않았으면 true.
  * now가 first_seen보다 이르면(시계 이상) 안전하게 true로 본다.
- * 데몬 시작 때 이미 있던 항목은 first_seen_ns=0이라 부팅 직후가 아니면 유예가 끝난 것으로 본다.
+ * first_seen_ns=0은 데몬 시작 때 이미 있던 항목이며, 부팅 직후이더라도 유예를 면제한다(항상 false).
  */
 bool tg_policy_in_grace(uint64_t first_seen_ns, uint64_t now_ns, uint32_t grace_sec);
 

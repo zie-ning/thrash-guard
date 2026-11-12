@@ -314,11 +314,20 @@ int tg_log_start(struct tg_log *l, const struct tg_config *cfg)
     int rc;
 
     if (cfg->log_path[0] != '\0') {
-        fd = open(cfg->log_path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0640);
+        /*
+         * 독자가 없는 FIFO는 O_NONBLOCK 없이 열면 독자가 나타날 때까지 open이 멈춰 표준 오류 대체에도
+         * 닿지 못한다. 그래서 O_NONBLOCK으로 열고(독자가 없으면 ENXIO로 실패해 대체한다), 연 뒤에는
+         * 해제해서 이후 쓰기는 기록 스레드가 기다리게 한다. 일반 파일에는 영향이 없다.
+         */
+        fd = open(cfg->log_path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC | O_NONBLOCK, 0640);
         if (fd < 0) {
             open_errno = errno;
             fd = STDERR_FILENO; /* 로그 때문에 보호 기능이 꺼지지 않게 표준 오류로 대체한다 */
         } else {
+            int fl = fcntl(fd, F_GETFL);
+
+            if (fl >= 0)
+                fcntl(fd, F_SETFL, fl & ~O_NONBLOCK);
             owned = fd;
         }
     }
