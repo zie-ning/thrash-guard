@@ -85,18 +85,32 @@ static void memwin_push(struct tg_judge *j, struct tg_memwin *w, uint64_t kib, u
     }
 }
 
-/* 윈도가 span을 채웠는가: 각 샘플이 한 간격을 대표한다고 본다. */
-static bool memwin_ready(const struct tg_judge *j, const struct tg_memwin *w)
+/*
+ * 결정에 쓸 시스템 윈도의 합. 가장 오래된 칸이 윈도 경계에 걸쳐 있으면(그 칸의 앞부분이
+ * 최근 span 밖) 칸 안의 stall이 윈도 밖에서 먼저 일어났다고 가정해 윈도 안 몫을 가장 적게 잡는다.
+ * 칸 안의 시간 분포를 알 수 없으므로 과대 추정으로 잘못 종료하는 것보다 놓치는 쪽을 택한다.
+ * 윈도가 span보다 길지 않으면(정상적인 주기) 칸을 통째로 쓴다.
+ */
+static void sys_totals(const struct tg_judge *j, uint64_t *full_us, uint64_t *dt_us)
 {
     uint32_t cap = j->nsamples;
-    uint64_t newest;
-    uint64_t oldest;
+    uint64_t sum_full = j->sys_full.sum;
+    uint64_t sum_dt = j->sys_dt.sum;
 
-    if (w->filled == 0)
-        return false;
-    newest = w->ns[(w->head + cap - 1) % cap];
-    oldest = w->ns[memwin_oldest(w, cap)];
-    return (newest - oldest) + j->interval_ns >= j->span_us * 1000ull;
+    *full_us = sum_full;
+    *dt_us = sum_dt;
+    if (sum_dt > j->span_us && j->sys_dt.filled > 1) {
+        uint32_t idx = (j->sys_dt.head + cap - j->sys_dt.filled) % cap;
+        uint64_t ofull = j->sys_full.v[idx];
+        uint64_t odt = j->sys_dt.v[idx];
+        uint64_t rest_dt = sum_dt - odt;
+        uint64_t inwin = j->span_us > rest_dt ? j->span_us - rest_dt : 0;
+        uint64_t outside = odt > inwin ? odt - inwin : 0;
+        uint64_t in_full = ofull > outside ? ofull - outside : 0;
+
+        *full_us = sum_full - ofull + in_full;
+        *dt_us = rest_dt + inwin;
+    }
 }
 
 /* 누적값의 증가분. 카운터가 줄었으면 0으로 본다. */
@@ -216,20 +230,41 @@ static void fill_stat(const struct tg_judge *j, const struct tg_judge_slot *sl,
     memset(st, 0, sizeof(*st));
     st->is_protected = c->is_protected;
     st->in_grace = tg_policy_in_grace(c->first_seen_ns, s->now_ns, j->grace_sec);
-    if (sl == NULL || !memwin_ready(j, &sl->mem))
+    if (sl == NULL || sl->mem.filled == 0)
         return;
-    st->ready = true;
 
+    /*
+     * 최근 span 안의 샘플만 쓴다. 공백 뒤에는 옛 최대값이 span보다 오래 남아 있을 수 있는데,
+     * 그 값으로 자격이나 증가량을 판단하지 않는다. 남은 샘플이 span을 덮지 못하면 아직 준비되지 않은 것이다.
+     */
     {
-        uint32_t oldest = memwin_oldest(&sl->mem, j->nsamples);
+        uint32_t cap = j->nsamples;
+        uint64_t span_ns = j->span_us * 1000ull;
+        uint32_t oldest = memwin_oldest(&sl->mem, cap);
+        uint32_t first_in = sl->mem.filled;
+        uint64_t newest_ns = sl->mem.ns[(sl->mem.head + cap - 1) % cap];
 
         for (uint32_t k = 0; k < sl->mem.filled; k++) {
-            uint64_t v = sl->mem.kib[(oldest + k) % j->nsamples];
+            uint64_t t = sl->mem.ns[(oldest + k) % cap];
+
+            if (s->now_ns <= t || s->now_ns - t <= span_ns) {
+                first_in = k;
+                break;
+            }
+        }
+        if (first_in == sl->mem.filled)
+            return;
+        if ((newest_ns - sl->mem.ns[(oldest + first_in) % cap]) + j->interval_ns < span_ns)
+            return;
+        st->ready = true;
+
+        for (uint32_t k = first_in; k < sl->mem.filled; k++) {
+            uint64_t v = sl->mem.kib[(oldest + k) % cap];
 
             if (v > max_kib)
                 max_kib = v;
         }
-        first_kib = sl->mem.kib[oldest];
+        first_kib = sl->mem.kib[(oldest + first_in) % cap];
     }
 
     st->max_bytes = max_kib * 1024;
@@ -320,7 +355,13 @@ struct tg_decision tg_judge_tick(struct tg_judge *j, const struct tg_sample *s,
     if (j->sys_dt.sum < j->span_us)
         return d; /* 윈도가 대표하는 시간을 채우기 전에는 결정하지 않는다 */
 
-    sys_avg = avg_x100(j->sys_full.sum, j->sys_dt.sum);
+    {
+        uint64_t full_us;
+        uint64_t dt_us;
+
+        sys_totals(j, &full_us, &dt_us);
+        sys_avg = avg_x100(full_us, dt_us);
+    }
     x100 = j->full_pct * 100;
     d.sys_avg_x100 = sys_avg;
 

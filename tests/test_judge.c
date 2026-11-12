@@ -558,6 +558,62 @@ static void test_short_gap_keeps_recent_data(void)
     TG_CHECK(d.sys_avg_x100 >= 5900 && d.sys_avg_x100 <= 6100);
 }
 
+static void test_straddling_gap_is_conservative(void)
+{
+    struct sim s;
+    struct tg_decision d;
+
+    /* 30%로 윈도를 채운다. 관찰은 이어지지만 종료하지 않는다 */
+    sim_init(&s, 1);
+    s.avail = MIB(300); /* 이후 한동안 여유 메모리가 충분해 종료하지 않는다 */
+    tg_judge_trigger(&s.j);
+    d = run_until(&s, 41, 30);
+    TG_CHECK(d.kind == TG_J_WATCHING);
+
+    /* 8초 공백: 앞 7초에만 압력이 100%였다. 이후 압력은 없다 */
+    s.now += 31 * TICK_NS;
+    s.sys_us += 7000000ull;
+    d = sim_tick(&s, 0);
+    TG_CHECK(d.kind != TG_J_KILL);
+    d = run_until(&s, 23, 0);
+
+    /*
+     * 공백 뒤 6초가 지났다. 최근 10초 안에는 공백의 마지막 4초만 있다. 칸을 통째로 쓰면
+     * 평균이 7/14 = 50%라 종료하지만, 압력이 윈도 밖에서 먼저 있었다고 가정하면 3/10 = 30%다.
+     */
+    s.avail = MIB(50);
+    d = sim_tick(&s, 0);
+    TG_CHECK(d.kind != TG_J_KILL);
+    TG_CHECK_EQ_U64(d.sys_avg_x100, 3000);
+}
+
+static void test_stale_candidate_peak_is_ignored(void)
+{
+    struct sim s;
+    struct tg_decision d;
+
+    /* A는 600 MiB로 30틱을 보낸 뒤 20 MiB로 내려간다. 여유 메모리는 충분해 종료하지 않는다 */
+    sim_init(&s, 1);
+    s.avail = MIB(300);
+    s.mem[0] = MIB(600);
+    tg_judge_trigger(&s.j);
+    d = run_until(&s, 30, 60);
+    TG_CHECK(d.kind == TG_J_SKIP || d.kind == TG_J_WATCHING);
+    s.mem[0] = MIB(20);
+
+    /* 8초 공백 뒤 샘플이 이어진다. 600 MiB 샘플은 아직 10초 안이다 */
+    s.now += 31 * TICK_NS;
+    s.sys_us += 32 * 150000ull;
+    d = sim_tick(&s, 60);
+    TG_CHECK(d.kind != TG_J_KILL);
+    d = run_until(&s, 8, 60); /* 600 MiB 샘플이 10초보다 오래됐다 */
+
+    /* 오래된 최대값(600 MiB)으로 자격을 판단해 종료하면 안 된다 */
+    s.avail = MIB(50);
+    d = sim_tick(&s, 60);
+    TG_CHECK(d.kind != TG_J_KILL);
+}
+
 static void test_recreated_cgroup_restarts_window(void)
 {
     struct sim s;
@@ -675,6 +731,8 @@ int main(void)
     TG_RUN(test_counter_reset);
     TG_RUN(test_gap_equal_to_window_discards_old);
     TG_RUN(test_short_gap_keeps_recent_data);
+    TG_RUN(test_straddling_gap_is_conservative);
+    TG_RUN(test_stale_candidate_peak_is_ignored);
     TG_RUN(test_recreated_cgroup_restarts_window);
     TG_RUN(test_candidate_disappears);
     TG_RUN(test_irregular_interval);
