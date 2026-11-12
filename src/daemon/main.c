@@ -1,19 +1,34 @@
 /*
  * main.c - thrash-guard 데몬 진입점
  *
- * 현재 범위(M3-1): CLI와 설정을 읽어 검증하고 유효 설정을 출력한다.
- * 이벤트 루프(M3-2) 이후 단계는 아직 없다.
+ * 시작 순서: 신호 막기(스레드 생성 전) -> 설정 -> 로그 시작 -> 자기 보호 -> 후보 스캔 시작
+ *           -> 엔진 -> PSI 트리거 등록 -> 이벤트 루프.
+ * 후보 탐색과 트리거 등록에 실패하면 시작을 거부한다(안전장치가 켜진 척하지 않기 위해).
  *
  * 이 파일은 초기화 단계라 stdio를 쓴다. 핵심 경로(이벤트 루프 이후)에서는 쓰지 않는다.
  */
 #include <errno.h>
 #include <getopt.h>
+#include <poll.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "config.h"
+#include "engine.h"
+#include "loop.h"
+#include "scanner.h"
+#include "selfprot.h"
 
-enum { EXIT_USAGE = 2, EXIT_CONFIG = 3 };
+enum { EXIT_USAGE = 2, EXIT_CONFIG = 3, EXIT_RUNTIME = 4 };
+
+#define SCAN_INTERVAL_MS 1000 /* 후보 cgroup 목록을 다시 읽는 주기 (임시) */
+#define STACK_PREFAULT_BYTES (64 * 1024)
+
+/* 구조체가 커서(수십 KiB) 정적으로 둔다. mlockall 대상에도 포함된다. */
+static struct tg_log g_log;
+static struct tg_scanner g_scanner;
+static struct tg_engine g_engine;
 
 static void usage(FILE *out)
 {
@@ -21,7 +36,7 @@ static void usage(FILE *out)
           "  --config <경로>   설정 파일 (key=value). 없으면 기본값만 쓴다\n"
           "  --dry-run         판단만 기록하고 종료는 하지 않는다 (기본)\n"
           "  --no-dry-run      실제로 cgroup을 종료한다\n"
-          "  --foreground      백그라운드로 전환하지 않는다\n"
+          "  --foreground      (호환용) 현재는 항상 전면에서 실행한다\n"
           "  --help            이 도움말\n",
           out);
 }
@@ -60,6 +75,98 @@ static void report_cfg_error(const char *path, int rc, const struct tg_cfg_err *
     if (rc != -EINVAL && rc != -EPERM)
         fprintf(stderr, " (%s)", strerror(-rc));
     fputc('\n', stderr);
+}
+
+static void log_msg(enum tg_log_level lv, const char *msg)
+{
+    struct tg_buf b;
+
+    if (tg_log_begin(&g_log, lv, &b)) {
+        tg_buf_str(&b, msg);
+        tg_log_end(&g_log, &b);
+    }
+}
+
+/* 데몬 본체. 시작 단계의 오류는 stderr로 알리고 시작을 거부한다. */
+static int run_daemon(const struct tg_config *cfg)
+{
+    struct tg_selfprot_opts sp;
+    struct tg_selfprot_result spr;
+    struct tg_loop_fds fds;
+    int sig_fd;
+    int trigger_fd;
+    int rc;
+
+    /* 어떤 스레드보다 먼저 신호를 막는다. 새 스레드가 이 설정을 물려받는다. */
+    sig_fd = tg_signals_block();
+    if (sig_fd < 0) {
+        fprintf(stderr, "thrash-guard: 신호 설정 실패: %s\n", strerror(-sig_fd));
+        return EXIT_RUNTIME;
+    }
+
+    rc = tg_log_start(&g_log, cfg);
+    if (rc != 0) {
+        fprintf(stderr, "thrash-guard: 로그 시작 실패: %s\n", strerror(-rc));
+        return EXIT_RUNTIME;
+    }
+
+    memset(&sp, 0, sizeof(sp));
+    sp.mlock = cfg->mlock;
+    sp.stack_prefault = STACK_PREFAULT_BYTES;
+    sp.oom_score_adj = cfg->oom_score_adj;
+    tg_selfprot_apply(&sp, &spr);
+    if (spr.mlock_err > 0)
+        log_msg(TG_LOG_WARN, "self protection: mlockall failed");
+    if (spr.oom_adj_err > 0)
+        log_msg(TG_LOG_WARN, "self protection: oom_score_adj failed");
+
+    rc = tg_scanner_start(&g_scanner, cfg->target_parent, SCAN_INTERVAL_MS);
+    if (rc != 0) {
+        fprintf(stderr, "thrash-guard: 후보 탐색을 시작할 수 없다: %s: %s\n", cfg->target_parent,
+                strerror(-rc));
+        goto fail_log;
+    }
+
+    rc = tg_engine_init(&g_engine, cfg, &g_log, &g_scanner, "/proc/pressure/memory",
+                        "/proc/meminfo");
+    if (rc != 0) {
+        fprintf(stderr, "thrash-guard: 엔진 초기화 실패: %s\n", strerror(-rc));
+        goto fail_scanner;
+    }
+
+    trigger_fd = tg_psi_trigger_open(cfg->trigger_stall_us, cfg->trigger_window_us);
+    if (trigger_fd < 0) {
+        fprintf(stderr,
+                "thrash-guard: PSI 트리거를 등록할 수 없다: %s\n"
+                "  root 권한과 PSI 지원(커널 4.20 이상, psi=0이 아님)이 필요하다.\n",
+                strerror(-trigger_fd));
+        goto fail_engine;
+    }
+
+    log_msg(TG_LOG_INFO, cfg->dry_run ? "start mode=dry-run" : "start mode=kill");
+
+    fds.sig_fd = sig_fd;
+    fds.trigger_fd = trigger_fd;
+    fds.trigger_events = POLLPRI;
+    rc = tg_loop_run(&g_engine, &fds);
+    if (rc != 0)
+        log_msg(TG_LOG_ERR, "loop stopped by error");
+    log_msg(TG_LOG_INFO, "stop");
+    tg_engine_log_summary(&g_engine);
+
+    close(trigger_fd);
+    tg_engine_close(&g_engine);
+    tg_scanner_stop(&g_scanner);
+    tg_log_stop(&g_log);
+    return rc == 0 ? 0 : EXIT_RUNTIME;
+
+fail_engine:
+    tg_engine_close(&g_engine);
+fail_scanner:
+    tg_scanner_stop(&g_scanner);
+fail_log:
+    tg_log_stop(&g_log);
+    return EXIT_RUNTIME;
 }
 
 int main(int argc, char **argv)
@@ -127,6 +234,5 @@ int main(int argc, char **argv)
     }
 
     print_config(&cfg, foreground);
-    fputs("thrash-guard: 이벤트 루프는 아직 구현되지 않았다 (M3-2). 종료한다.\n", stderr);
-    return 0;
+    return run_daemon(&cfg);
 }

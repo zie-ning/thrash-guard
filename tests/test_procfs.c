@@ -228,8 +228,34 @@ static void test_read_proc_live(void)
     TG_CHECK(tg_psi_parse(buf, len, &psi) == 0);
 }
 
+static void test_parse_u64(void)
+{
+    uint64_t v = 7;
+
+    TG_CHECK(tg_parse_u64("123456\n", 7, &v) == 0);
+    TG_CHECK_EQ_U64(v, 123456);
+    TG_CHECK(tg_parse_u64("  42 \n", 6, &v) == 0);
+    TG_CHECK_EQ_U64(v, 42);
+    TG_CHECK(tg_parse_u64("0", 1, &v) == 0);
+    TG_CHECK_EQ_U64(v, 0);
+    TG_CHECK(tg_parse_u64("18446744073709551615\n", 21, &v) == 0);
+    TG_CHECK(v == UINT64_MAX);
+
+    v = 99;
+    TG_CHECK(tg_parse_u64("", 0, &v) == -EINVAL);
+    TG_CHECK(tg_parse_u64("\n", 1, &v) == -EINVAL);
+    TG_CHECK(tg_parse_u64("abc", 3, &v) == -EINVAL);
+    TG_CHECK(tg_parse_u64("12x", 3, &v) == -EINVAL);
+    TG_CHECK(tg_parse_u64("1 2", 3, &v) == -EINVAL);
+    TG_CHECK(tg_parse_u64("-5", 2, &v) == -EINVAL);
+    TG_CHECK(tg_parse_u64("18446744073709551616", 20, &v) == -EOVERFLOW);
+    TG_CHECK(tg_parse_u64("max\n", 4, &v) == -EINVAL); /* cgroup memory.max 값 */
+    TG_CHECK_EQ_U64(v, 99); /* 실패하면 건드리지 않는다 */
+}
+
 int main(void)
 {
+    TG_RUN(test_parse_u64);
     TG_RUN(test_psi_values);
     TG_RUN(test_psi_without_full);
     TG_RUN(test_psi_malformed);

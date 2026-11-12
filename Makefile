@@ -29,7 +29,8 @@ SAMPLER_SRC := src/sampler/main.c
 LOAD_SRC := workload/tg_load.c
 # 데몬 모듈. main.c를 뺀 나머지는 테스트에도 함께 링크한다.
 DAEMON_LIB_SRC := src/daemon/config.c src/daemon/policy.c src/daemon/targets.c \
-                  src/daemon/scanner.c src/daemon/judge.c src/daemon/killer.c src/daemon/log.c
+                  src/daemon/scanner.c src/daemon/judge.c src/daemon/killer.c src/daemon/log.c \
+                  src/daemon/sample.c src/daemon/engine.c src/daemon/loop.c
 DAEMON_SRC := src/daemon/main.c
 
 SAMPLER := $(BUILD)/tg-sampler
@@ -59,7 +60,7 @@ TEST_CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined \
                -fno-sanitize-recover=all -DTG_FIXTURE_DIR='"tests/fixtures"'
 TESTS := $(TBUILD)/test_procfs $(TBUILD)/test_fmt $(TBUILD)/test_cgscan \
          $(TBUILD)/test_config $(TBUILD)/test_policy $(TBUILD)/test_targets \
-         $(TBUILD)/test_judge $(TBUILD)/test_killer $(TBUILD)/test_log
+         $(TBUILD)/test_judge $(TBUILD)/test_killer $(TBUILD)/test_engine $(TBUILD)/test_log
 
 $(TBUILD)/test_%: tests/test_%.c $(COMMON_SRC) $(DAEMON_LIB_SRC) tests/tg_test.h \
                   $(wildcard src/common/*.h src/daemon/*.h)
@@ -73,7 +74,7 @@ test: $(TESTS)
 # 스레드를 쓰는 모듈(로그 링버퍼, 스캔 스레드)의 데이터 경쟁 검사. ThreadSanitizer는
 # AddressSanitizer와 함께 쓸 수 없어 별도 빌드로 돌린다.
 TSBUILD := build/tsan
-TSAN_TESTS := $(TSBUILD)/test_log $(TSBUILD)/test_targets
+TSAN_TESTS := $(TSBUILD)/test_log $(TSBUILD)/test_targets $(TSBUILD)/test_engine
 
 $(TSBUILD)/test_%: tests/test_%.c $(COMMON_SRC) $(DAEMON_LIB_SRC) tests/tg_test.h \
                    $(wildcard src/common/*.h src/daemon/*.h)

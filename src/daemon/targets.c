@@ -37,7 +37,7 @@ static bool live_in(const struct tg_targets *keep, const struct tg_target *e)
     if (keep == NULL)
         return false;
     for (uint32_t i = 0; i < keep->n; i++) {
-        if (keep->t[i].pressure_fd == e->pressure_fd && keep->t[i].stat_fd == e->stat_fd &&
+        if (keep->t[i].pressure_fd == e->pressure_fd && keep->t[i].current_fd == e->current_fd &&
             strcmp(keep->t[i].name, e->name) == 0)
             return true;
     }
@@ -53,10 +53,10 @@ void tg_targets_release(struct tg_targets *t, const struct tg_targets *keep)
             continue;
         if (e->pressure_fd >= 0)
             close(e->pressure_fd);
-        if (e->stat_fd >= 0)
-            close(e->stat_fd);
+        if (e->current_fd >= 0)
+            close(e->current_fd);
         e->pressure_fd = -1;
-        e->stat_fd = -1;
+        e->current_fd = -1;
     }
     t->n = 0;
     t->skipped = 0;
@@ -110,7 +110,7 @@ static void add_entry(struct tg_targets *next, const struct tg_targets *cur, int
         next->skipped++;
         return;
     }
-    sfd = open_in_dir(dfd, name, nlen, "memory.stat");
+    sfd = open_in_dir(dfd, name, nlen, "memory.current");
     if (sfd < 0) {
         close(pfd);
         return;
@@ -120,7 +120,7 @@ static void add_entry(struct tg_targets *next, const struct tg_targets *cur, int
     memcpy(e->name, name, nlen);
     e->name[nlen] = '\0';
     e->pressure_fd = pfd;
-    e->stat_fd = sfd;
+    e->current_fd = sfd;
     e->first_seen_ns = initial ? 0 : now_ns;
 }
 
