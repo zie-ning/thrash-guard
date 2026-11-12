@@ -17,3 +17,6 @@ __pycache__/
 # 측정 결과의 파생 파일 (samples.log에서 tg_to_csv.py로 다시 만들 수 있다)
 /results/m1/**/samples.csv
 /results/m1/**/cg.csv
+
+# 스모크 테스트 결과 (참고용으로만 로컬에 두고 커밋하지 않는다)
+/results/m1-smoke/
