@@ -10,6 +10,7 @@
  *   -EINVAL  잘못된 이름(빈 이름, '/' 포함, ".", "..", 용량 초과)
  *   -ENOENT  cgroup이 이미 없다
  *   -ENOTSUP cgroup은 있으나 cgroup.kill이 없다(커널 5.14 미만)
+ *   -ESTALE  샘플링한 cgroup이 아니다(같은 이름으로 다시 만들어졌다). 종료하지 않는다
  *   -EACCES, -EPERM 등 그 밖의 값은 open·write의 errno
  */
 #ifndef TG_KILLER_H
@@ -18,5 +19,13 @@
 #include "targets.h"
 
 int tg_kill_cgroup(int parent_fd, const char *name);
+
+/*
+ * ref_fd가 0 이상이면 그 fd(샘플링할 때 열어 둔 같은 cgroup의 memory.current)와 이름으로 다시 찾은
+ * cgroup의 memory.current가 같은 파일일 때만 종료한다. 샘플링한 뒤 같은 이름으로 cgroup이 다시
+ * 만들어졌다면 -ESTALE을 돌려주고 쓰지 않는다. 확인과 쓰기는 같은 디렉터리 핸들로 하므로 그 사이에
+ * 이름이 다른 cgroup을 가리키지 못한다.
+ */
+int tg_kill_cgroup_checked(int parent_fd, const char *name, int ref_fd);
 
 #endif /* TG_KILLER_H */

@@ -8,9 +8,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
-
-#define KILL_FILE "/cgroup.kill"
 
 static bool name_ok(const char *name)
 {
@@ -28,36 +27,58 @@ static bool name_ok(const char *name)
     return true;
 }
 
+/* dfd 아래 memory.current가 ref_fd와 같은 파일인가 */
+static int same_cgroup(int dfd, int ref_fd)
+{
+    struct stat a;
+    struct stat b;
+
+    if (fstatat(dfd, "memory.current", &a, AT_SYMLINK_NOFOLLOW) != 0)
+        return -errno;
+    if (fstat(ref_fd, &b) != 0)
+        return -errno;
+    return (a.st_dev == b.st_dev && a.st_ino == b.st_ino) ? 0 : -ESTALE;
+}
+
 int tg_kill_cgroup(int parent_fd, const char *name)
 {
-    char path[TG_TARGET_NAME_CAP + sizeof(KILL_FILE)];
-    size_t n;
+    return tg_kill_cgroup_checked(parent_fd, name, -1);
+}
+
+int tg_kill_cgroup_checked(int parent_fd, const char *name, int ref_fd)
+{
+    int dfd;
     int fd;
     ssize_t w;
+    int rc;
 
     if (parent_fd < 0 || !name_ok(name))
         return -EINVAL;
 
-    n = strlen(name);
-    memcpy(path, name, n);
-    memcpy(path + n, KILL_FILE, sizeof(KILL_FILE));
+    /* 한 번 연 디렉터리 핸들로 확인과 쓰기를 모두 한다. 그 사이 이름이 바뀌어도 같은 cgroup이다 */
+    do {
+        dfd = openat(parent_fd, name, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+    } while (dfd < 0 && errno == EINTR);
+    if (dfd < 0)
+        return -errno;
+
+    if (ref_fd >= 0) {
+        rc = same_cgroup(dfd, ref_fd);
+        if (rc != 0) {
+            close(dfd);
+            return rc;
+        }
+    }
 
     do {
-        fd = openat(parent_fd, path, O_WRONLY | O_CLOEXEC | O_NOFOLLOW);
+        fd = openat(dfd, "cgroup.kill", O_WRONLY | O_CLOEXEC | O_NOFOLLOW);
     } while (fd < 0 && errno == EINTR);
+    close(dfd);
     if (fd < 0) {
         int err = errno;
 
-        if (err == ENOENT) {
-            /* cgroup 자체가 없는지, cgroup.kill만 없는지 구분한다 */
-            int dfd = openat(parent_fd, name, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-
-            if (dfd >= 0) {
-                close(dfd);
-                return -ENOTSUP;
-            }
-        }
-        return -err;
+        /* 디렉터리는 열렸으므로 cgroup.kill만 없는 것이다(커널 5.14 미만) */
+        return err == ENOENT ? -ENOTSUP : -err;
     }
 
     do {

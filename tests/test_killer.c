@@ -121,16 +121,61 @@ static void test_symlink_kill_file_refused(void)
     close(dfd);
 }
 
+static void test_checked_identity(void)
+{
+    int dfd = open(root, O_RDONLY | O_DIRECTORY);
+    char path[256];
+    char buf[8];
+    int ref;
+
+    mk_cg("c.scope", true);
+    mk_cg("d.scope", true);
+    snprintf(path, sizeof(path), "%s/c.scope/memory.current", root);
+    {
+        int fd = open(path, O_WRONLY | O_CREAT, 0600);
+
+        TG_CHECK(fd >= 0);
+        close(fd);
+    }
+    snprintf(path, sizeof(path), "%s/d.scope/memory.current", root);
+    {
+        int fd = open(path, O_WRONLY | O_CREAT, 0600);
+
+        TG_CHECK(fd >= 0);
+        close(fd);
+    }
+
+    /* 샘플링할 때 연 fd와 같은 cgroup이면 종료한다 */
+    snprintf(path, sizeof(path), "%s/c.scope/memory.current", root);
+    ref = open(path, O_RDONLY);
+    TG_CHECK(ref >= 0);
+    TG_CHECK(tg_kill_cgroup_checked(dfd, "c.scope", ref) == 0);
+    read_kill_file("c.scope", buf, sizeof(buf));
+    TG_CHECK(strcmp(buf, "1") == 0);
+
+    /* 이름은 같아도 다른 cgroup을 가리키는 fd라면(다시 만들어진 경우) 쓰지 않는다 */
+    TG_CHECK(tg_kill_cgroup_checked(dfd, "d.scope", ref) == -ESTALE);
+    read_kill_file("d.scope", buf, sizeof(buf));
+    TG_CHECK(strcmp(buf, "") == 0);
+
+    close(ref);
+    close(dfd);
+}
+
 int main(void)
 {
-    snprintf(root, sizeof(root), "/tmp/tg_killer_%d", (int)getpid());
-    TG_CHECK(mkdir(root, 0700) == 0);
+    snprintf(root, sizeof(root), "/tmp/tg_killer_XXXXXX");
+    if (mkdtemp(root) == NULL) {
+        perror("mkdtemp");
+        return 1;
+    }
 
     TG_RUN(test_writes_one);
     TG_RUN(test_missing_cgroup);
     TG_RUN(test_no_kill_file);
     TG_RUN(test_bad_names);
     TG_RUN(test_symlink_kill_file_refused);
+    TG_RUN(test_checked_identity);
 
     {
         char cmd[200];

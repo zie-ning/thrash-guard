@@ -345,16 +345,60 @@ static void test_burst_uses_window_max(void)
     struct sim s;
     struct tg_decision d;
 
-    /* A는 윈도 안에서 300 MiB를 잡았다 놓기를 반복한다. 마지막 샘플이 해제 구간이어도 최대로 자격을 판단한다 */
+    /* A는 윈도 안에서 300 MiB를 잡았다 놓기를 반복한다. 마지막 샘플(41번째)은 해제 구간이지만 최대로 자격을 판단한다 */
     sim_init(&s, 1);
     tg_judge_trigger(&s.j);
     memset(&d, 0, sizeof(d));
     for (int t = 1; t <= 41; t++) {
-        s.mem[0] = (t % 8 < 4) ? MIB(300) : MIB(20);
+        s.mem[0] = ((t + 4) % 8 < 4) ? MIB(300) : MIB(20);
         d = sim_tick(&s, 60);
     }
+    TG_CHECK_EQ_U64(s.mem[0], MIB(20)); /* 마지막 샘플이 실제로 해제 구간인지 확인 */
     TG_CHECK(d.kind == TG_J_KILL);
     TG_CHECK_EQ_U64(d.cand_max_bytes, MIB(300));
+}
+
+static void test_huge_memory_not_saturated(void)
+{
+    struct sim s;
+    struct tg_decision d;
+
+    /* 8 TiB 호스트에서 5 TiB와 6 TiB 후보가 같은 값으로 뭉개지지 않는다 */
+    sim_init(&s, 2);
+    s.total = 8ull << 40;
+    s.avail = 100ull << 30;
+    s.mem[0] = 5ull << 40;
+    s.mem[1] = 6ull << 40;
+    tg_judge_trigger(&s.j);
+    d = run_until(&s, 100, 60);
+    TG_CHECK(d.kind == TG_J_KILL);
+    TG_CHECK(d.cand_index == 1);
+    TG_CHECK_EQ_U64(d.cand_max_bytes, 6ull << 40);
+}
+
+static void test_long_gap_discards_window(void)
+{
+    struct sim s;
+    struct tg_decision d;
+
+    /* 압력이 높은 채 30틱을 쌓았지만 윈도(40칸)는 아직 덜 찼다 */
+    sim_init(&s, 1);
+    tg_judge_trigger(&s.j);
+    d = run_until(&s, 30, 60);
+    TG_CHECK(d.kind == TG_J_WATCHING);
+
+    /*
+     * 30초 동안 샘플을 못 읽은 뒤 복구된다(윈도 10초보다 긴 공백). 공백 앞쪽에 압력이 있었더라도
+     * 그 자료로 곧바로 종료하면 안 된다. 윈도를 버리고 새 기준점부터 다시 쌓는다.
+     */
+    s.now += 120 * TICK_NS;
+    s.sys_us += 120 * 150000ull;
+    d = sim_tick(&s, 60);
+    TG_CHECK(d.kind == TG_J_WATCHING);
+    d = run_until(&s, 35, 60);
+    TG_CHECK(d.kind == TG_J_WATCHING); /* 옛 자료를 쓰면 이 안에 종료 결정이 났을 상황 */
+    d = run_until(&s, 20, 60);
+    TG_CHECK(d.kind == TG_J_KILL);
 }
 
 static void test_no_culprit_then_found(void)
@@ -563,6 +607,8 @@ int main(void)
     TG_RUN(test_growth_threshold);
     TG_RUN(test_size_tiebreak_and_order);
     TG_RUN(test_burst_uses_window_max);
+    TG_RUN(test_huge_memory_not_saturated);
+    TG_RUN(test_long_gap_discards_window);
     TG_RUN(test_no_culprit_then_found);
     TG_RUN(test_protected_excluded);
     TG_RUN(test_grace_excludes_candidate);

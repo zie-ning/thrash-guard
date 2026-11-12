@@ -31,7 +31,7 @@ static void win_push(struct tg_win *w, uint32_t cap, uint32_t v)
     w->head = (w->head + 1) % cap;
 }
 
-static void memwin_push(struct tg_memwin *w, uint32_t cap, uint32_t kib)
+static void memwin_push(struct tg_memwin *w, uint32_t cap, uint64_t kib)
 {
     if (w->filled < cap)
         w->filled++;
@@ -45,10 +45,9 @@ static uint64_t delta(uint64_t now, uint64_t prev)
     return now >= prev ? now - prev : 0;
 }
 
-static void reset_watch(struct tg_judge *j)
+/* 윈도와 기준점을 비운다. 관찰 중인지 여부와 건너뜀 기록은 건드리지 않는다. */
+static void reset_windows(struct tg_judge *j)
 {
-    j->watching = false;
-    j->last_skip = TG_R_NONE;
     j->sys_has_prev = false;
     j->sys_prev_total_us = 0;
     j->sys_prev_now_ns = 0;
@@ -59,10 +58,18 @@ static void reset_watch(struct tg_judge *j)
     j->nstat = 0;
 }
 
+static void reset_watch(struct tg_judge *j)
+{
+    j->watching = false;
+    j->last_skip = TG_R_NONE;
+    reset_windows(j);
+}
+
 void tg_judge_init(struct tg_judge *j, const struct tg_config *cfg)
 {
     memset(j, 0, sizeof(*j));
     j->nsamples = tg_config_window_samples(cfg);
+    j->span_us = (uint64_t)j->nsamples * cfg->sample_interval_ms * 1000ull;
     j->full_pct = cfg->full_pct;
     j->mem_avail_pct = cfg->mem_avail_pct;
     j->min_size_pct = cfg->min_size_pct;
@@ -141,8 +148,8 @@ static void fill_stat(const struct tg_judge *j, const struct tg_judge_slot *sl,
                       struct tg_cand_stat *st)
 {
     uint64_t total_kib = s->mem_total_bytes / 1024;
-    uint32_t max_kib = 0;
-    uint32_t first_kib;
+    uint64_t max_kib = 0;
+    uint64_t first_kib;
 
     memset(st, 0, sizeof(*st));
     st->is_protected = c->is_protected;
@@ -157,10 +164,10 @@ static void fill_stat(const struct tg_judge *j, const struct tg_judge_slot *sl,
     }
     first_kib = sl->mem.kib[sl->mem.head]; /* 가득 찼으므로 head가 가장 오래된 값 */
 
-    st->max_bytes = (uint64_t)max_kib * 1024;
-    st->growth_bytes = max_kib > first_kib ? (uint64_t)(max_kib - first_kib) * 1024 : 0;
+    st->max_bytes = max_kib * 1024;
+    st->growth_bytes = max_kib > first_kib ? (max_kib - first_kib) * 1024 : 0;
     st->eligible = !st->in_grace && !st->is_protected &&
-                   (uint64_t)max_kib * 100 >= total_kib * j->min_size_pct && total_kib > 0;
+                   max_kib * 100 >= total_kib * j->min_size_pct && total_kib > 0;
     st->growing = st->growth_bytes / 1024 * 100 >= total_kib * j->min_growth_pct && total_kib > 0;
 }
 
@@ -195,7 +202,19 @@ struct tg_decision tg_judge_tick(struct tg_judge *j, const struct tg_sample *s,
 
     nc = s->ncand > TG_MAX_TARGETS ? TG_MAX_TARGETS : s->ncand;
 
-    /* 시스템 윈도 갱신. 첫 샘플은 기준점만 잡는다. */
+    /*
+     * 시스템 윈도 갱신. 첫 샘플은 기준점만 잡는다. 직전 샘플과의 간격이 윈도 전체가 대표하는
+     * 시간보다 길면(긴 지연, 샘플 읽기 실패 뒤) 윈도의 옛 자료가 최근 10초를 대표하지 못하므로
+     * 윈도를 모두 버리고 이번 샘플을 새 기준점으로 삼는다.
+     */
+    if (j->sys_has_prev) {
+        uint64_t dt_us = s->now_ns > j->sys_prev_now_ns ? (s->now_ns - j->sys_prev_now_ns) / 1000 : 0;
+
+        if (dt_us > j->span_us) {
+            reset_windows(j);
+            j->last_skip = TG_R_NONE;
+        }
+    }
     if (j->sys_has_prev) {
         uint64_t dt_us = s->now_ns > j->sys_prev_now_ns ? (s->now_ns - j->sys_prev_now_ns) / 1000 : 0;
 
@@ -220,7 +239,7 @@ struct tg_decision tg_judge_tick(struct tg_judge *j, const struct tg_sample *s,
         if (sl == NULL)
             sl = slot_alloc(j, c->name);
         if (sl != NULL) /* 표 크기가 TG_MAX_TARGETS라 정상 입력에서는 항상 성공한다 */
-            memwin_push(&sl->mem, j->nsamples, sat32(c->mem_bytes / 1024));
+            memwin_push(&sl->mem, j->nsamples, c->mem_bytes / 1024);
         fill_stat(j, sl, c, s, &j->stat[i]);
     }
 

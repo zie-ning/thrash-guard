@@ -138,16 +138,19 @@ static void log_candidates(struct tg_engine *e, const struct tg_sample_buf *sb)
 /* ---------- 결정 처리 ---------- */
 
 /* 종료(또는 dry-run의 가상 종료)를 처리한다. 정책 기록은 성공한 경우에만 남긴다. */
-static void do_kill(struct tg_engine *e, const struct tg_decision *d, uint64_t now_ns)
+static void do_kill(struct tg_engine *e, const struct tg_targets *t, const struct tg_decision *d,
+                    uint64_t now_ns)
 {
     const char *name = e->sbuf.cand[d->cand_index].name;
+    const struct tg_target *tgt = tg_targets_find(t, name);
     bool dry = e->cfg->dry_run;
     int rc = 0;
 
     if (dry) {
         e->st.dry_kills++;
     } else {
-        rc = tg_kill_cgroup(e->parent_fd, name);
+        /* 샘플링할 때 읽은 fd와 같은 cgroup일 때만 종료한다(같은 이름으로 다시 만들어진 경우 방지) */
+        rc = tg_kill_cgroup_checked(e->parent_fd, name, tgt != NULL ? tgt->current_fd : -1);
         if (rc == 0)
             e->st.kills++;
         else
@@ -247,7 +250,7 @@ void tg_engine_tick(struct tg_engine *e, uint64_t now_ns)
             log_skip(e, &d);
             break;
         case TG_J_KILL:
-            do_kill(e, &d, now_ns);
+            do_kill(e, t, &d, now_ns);
             e->watching = false;
             break;
         case TG_J_IDLE:
