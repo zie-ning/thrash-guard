@@ -32,7 +32,8 @@ static size_t proc_path(char *out, size_t cap, uint64_t pid)
         digits[nd++] = (char)('0' + pid % 10);
         pid /= 10;
     } while (pid > 0 && nd < sizeof(digits));
-    if (nd + sizeof(tail) > cap)
+    /* 반복문이 nd를 sizeof(digits)로 막으므로 첫 조건은 도달하지 않는다. 정적 분석기에 배열 경계를 알려 주려는 확인이다. */
+    if (nd > sizeof(digits) || nd + sizeof(tail) > cap)
         return 0;
     while (nd > 0)
         out[n++] = digits[--nd];
