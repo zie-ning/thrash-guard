@@ -1,0 +1,81 @@
+[16:43:54] 실험 C: mode=dry, VM 시작 (IOPS=3000, BPS=10900000)
+active
+# 확인한 뒤 ExecStart의 --dry-run을 --no-dry-run으로 바꿔 실제 종료를 켠다.
+ExecStart=/usr/local/sbin/thrash-guard --config /etc/thrash-guard/thrash-guard.conf --dry-run
+system.slice memory.low=0 current=425MiB
+system.slice/ssh.service memory.low=0 current=9MiB
+user.slice memory.low=0 current=257MiB
+hog-started
+[16:45:04] login #1 1794555904.238864162 0.3 0 | avail=482MiB full=avg10=0.00 containers=1 
+[16:45:15] login #2 1794555914.562411412 0.4 0 | avail=445MiB full=avg10=0.00 containers=1 
+[16:45:24] login #3 1794555922.929819131 1.2 0 | avail=399MiB full=avg10=0.00 containers=1 
+[16:45:34] login #4 1794555934.136493626 0.2 0 | avail=436MiB full=avg10=0.00 containers=1 
+[16:45:44] login #5 1794555944.413691201 0.5 0 | avail=405MiB full=avg10=0.00 containers=1 
+[16:45:53] login #6 1794555952.763755110 0.2 0 | avail=374MiB full=avg10=0.00 containers=1 
+[16:46:03] login #7 1794555963.025519657 0.2 0 | avail=335MiB full=avg10=0.00 containers=1 
+[16:46:13] login #8 1794555973.279702485 0.7 0 | avail=278MiB full=avg10=0.00 containers=1 
+[16:46:22] login #9 1794555981.847518094 0.2 0 | avail=259MiB full=avg10=0.00 containers=1 
+[16:46:32] login #10 1794555992.084507161 0.2 0 | avail=221MiB full=avg10=0.00 containers=1 
+[16:46:42] login #11 1794556002.356506432 0.2 0 | avail=183MiB full=avg10=0.00 containers=1 
+[16:46:50] login #12 1794556010.414217231 0.3 0 | avail=146MiB full=avg10=0.00 containers=1 
+[16:47:01] login #13 1794556020.787952600 0.2 0 | avail=107MiB full=avg10=0.00 containers=1 
+[16:47:11] login #14 1794556031.009724804 0.2 0 | avail=74MiB full=avg10=0.72 containers=1 
+[16:47:20] login #15 1794556039.056726893 1.7 0 | avail=56MiB full=avg10=0.21 containers=1 
+[16:47:31] login #16 1794556050.774760739 0.2 0 | avail=28MiB full=avg10=0.07 containers=1 
+[16:47:46] login #17 1794556061.009596224 5.0 255 | Connection timed out during banner exchange 
+[16:47:58] login #18 1794556073.829705132 5.0 255 | Connection timed out during banner exchange 
+[16:48:13] login #19 1794556088.873308578 5.0 255 | Connection timed out during banner exchange 
+[16:48:26] login #20 1794556101.845793531 5.0 255 | Connection timed out during banner exchange 
+[16:48:41] login #21 1794556116.919599718 5.0 255 | Connection timed out during banner exchange 
+[16:48:54] login #22 1794556129.752798012 5.0 255 | Connection timed out during banner exchange 
+[16:49:09] login #23 1794556144.805608496 5.0 255 | Connection timed out during banner exchange 
+[16:49:22] login #24 1794556159.846408200 2.9 255 | Connection timed out during banner exchange 
+[16:49:37] login #25 1794556172.817811841 5.0 255 | Connection timed out during banner exchange 
+[16:49:50] login #26 1794556187.894389062 2.8 255 | Connection timed out during banner exchange 
+[16:50:05] login #27 1794556200.750979196 5.0 255 | Connection timed out during banner exchange 
+[16:50:20] login #28 1794556215.792897480 5.0 255 | Connection timed out during banner exchange 
+[16:50:33] login #29 1794556228.635328838 5.0 255 | Connection timed out during banner exchange 
+[16:50:48] login #30 1794556243.684473459 5.0 255 | Connection timed out during banner exchange 
+[16:51:01] login #31 1794556256.550340033 5.0 255 | Connection timed out during banner exchange 
+[16:51:16] login #32 1794556271.586608520 5.0 255 | Connection timed out during banner exchange 
+[16:51:29] login #33 1794556284.407799888 5.0 255 | Connection timed out during banner exchange 
+[16:51:44] login #34 1794556299.464428497 5.0 255 | Connection timed out during banner exchange 
+[16:51:57] login #35 1794556312.442904815 5.0 255 | Connection timed out during banner exchange 
+[16:52:12] login #36 1794556327.495914010 5.0 255 | Connection timed out during banner exchange 
+[16:52:25] login #37 1794556342.537757130 2.9 255 | Connection timed out during banner exchange 
+[16:52:37] login #38 1794556355.427429111 2.0 255 |  
+[16:52:50] login #39 1794556367.488063894 3.5 0 | avail=581MiB full=avg10=0.75 containers=0 
+[16:52:50] hog 종료 감지
+[16:53:08] ==== 결과 수집
+--- memory.events
+system.slice low=0 :: low 0 high 0 max 0 oom 0 oom_kill 0 oom_group_kill 0 
+system.slice/ssh.service low=0 :: low 0 high 0 max 0 oom 0 oom_kill 0 oom_group_kill 0 
+user.slice low=0 :: low 0 high 0 max 0 oom 0 oom_kill 0 oom_group_kill 0 
+user.slice/user-1000.slice low=0 :: low 0 high 0 max 0 oom 0 oom_kill 0 oom_group_kill 0 
+--- oom/dmesg
+--- daemon
+2026-11-13T07:50:40.728Z info judge skip reason=no_candidate sys_avg_x100=1064 avail_x100=0
+2026-11-13T07:50:42.478Z info judge skip reason=cooldown sys_avg_x100=1158 avail_x100=0
+2026-11-13T07:50:42.727Z info judge skip reason=no_candidate sys_avg_x100=1158 avail_x100=0
+2026-11-13T07:50:43.478Z info judge skip reason=cooldown sys_avg_x100=1078 avail_x100=0
+2026-11-13T07:50:45.478Z info judge skip reason=no_candidate sys_avg_x100=1106 avail_x100=0
+2026-11-13T07:50:46.978Z info judge skip reason=cooldown sys_avg_x100=1104 avail_x100=0
+2026-11-13T07:50:47.228Z info judge skip reason=no_candidate sys_avg_x100=1073 avail_x100=0
+2026-11-13T07:50:52.478Z info judge calm sys_avg_x100=458
+2026-11-13T07:50:52.889Z info trigger watch start
+2026-11-13T07:51:15.390Z info judge skip reason=no_candidate sys_avg_x100=1004 avail_x100=0
+2026-11-13T07:51:16.140Z warn judge kill cand=docker-47d16a2d790463d2845f22bab1e19c5df20a654b0ffa7b1914354fd4c1f9d83d.scope dry_run=1 result=0 sys_avg_x100=1142 avail_x100=0 max_bytes=684036096 growth_bytes=413696 growing=0
+2026-11-13T07:51:16.140Z info judge cand name=docker-47d16a2d790463d2845f22bab1e19c5df20a654b0ffa7b1914354fd4c1f9d83d.scope max_bytes=684036096 growth_bytes=413696 ready=1 eligible=1 growing=0 grace=0 protected=0
+2026-11-13T07:51:16.505Z info trigger watch start
+2026-11-13T07:51:27.506Z info judge calm sys_avg_x100=443
+2026-11-13T07:51:33.873Z info trigger watch start
+2026-11-13T07:51:52.874Z info judge calm sys_avg_x100=440
+2026-11-13T07:51:58.417Z info trigger watch start
+2026-11-13T07:52:08.417Z info judge calm sys_avg_x100=246
+2026-11-13T07:52:29.313Z info trigger watch start
+2026-11-13T07:52:39.314Z info judge calm sys_avg_x100=249
+2026-11-13T07:53:08.080Z info stats triggers=13 ticks=989 skips=13 calms=10 kills=0 dry_kills=3 kill_errors=0 sample_errors=0 late_ticks=0 max_delay_ms=1
+--- pressure
+some avg10=0.10 avg60=2.40 avg300=3.28 total=20192436
+full avg10=0.10 avg60=2.37 avg300=3.23 total=19911814
+[16:53:09] psi 기록 494줄, 완료

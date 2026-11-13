@@ -1,0 +1,55 @@
+[12:20:49] VM 시작 (IOPS=100)
+active
+# 확인한 뒤 ExecStart의 --dry-run을 --no-dry-run으로 바꿔 실제 종료를 켠다.
+ExecStart=/usr/local/sbin/thrash-guard --config /etc/thrash-guard/thrash-guard.conf --no-dry-run
+hog-started
+[12:23:36] t=10 532576kB avg10=0.10 Up 11 seconds 0 
+[12:23:45] t=20 494376kB avg10=0.03 Up 21 seconds 0 
+[12:23:55] t=30 460128kB avg10=0.01 Up 31 seconds 0 
+[12:24:06] t=40 422672kB avg10=0.00 Up 41 seconds 0 
+[12:24:16] t=50 383656kB avg10=0.00 Up 51 seconds 0 
+[12:24:30] t=60 302440kB avg10=0.00 Up About a minute 0 
+[12:24:40] t=70 282228kB avg10=0.00 Up About a minute 0 
+[12:24:50] t=80 239812kB avg10=0.00 Up About a minute 0 
+[12:25:06] t=90 193476kB avg10=0.00 Up About a minute 0 
+[12:25:17] t=100 134120kB avg10=0.00 Up About a minute 0 
+[12:25:27] t=110 91708kB avg10=1.96 Up 2 minutes 0 
+[12:25:49] t=120  
+[12:26:03] t=130 Connection timed out during banner exchange 
+[12:26:18] t=140 Connection timed out during banner exchange 
+[12:26:31] t=150 Connection timed out during banner exchange 
+[12:26:46] t=160 Connection timed out during banner exchange 
+[12:27:00] t=170 Connection timed out during banner exchange 
+[12:27:15] t=180 Connection timed out during banner exchange 
+[12:27:35] t=190  
+[12:27:46] t=200 595352kB avg10=1.24 Exited (137) 28 seconds ago 1 
+[12:27:46] hog 종료 감지
+[12:27:59] ==== 데몬 로그
+Started thrash-guard: terminate a culprit cgroup under memory thrashing.
+thrash-guard 유효 설정:
+2026-11-13T03:23:14.954Z warn no cgroup under target_parent matches target_match, nothing will be terminated
+2026-11-13T03:23:14.955Z info start mode=kill
+2026-11-13T03:25:16.535Z info trigger watch start
+2026-11-13T03:25:26.535Z info judge calm sys_avg_x100=388
+2026-11-13T03:25:27.382Z info trigger watch start
+2026-11-13T03:25:37.383Z info judge calm sys_avg_x100=51
+2026-11-13T03:25:48.319Z info trigger watch start
+2026-11-13T03:25:58.320Z info judge calm sys_avg_x100=1762
+2026-11-13T03:25:58.719Z info trigger watch start
+2026-11-13T03:26:10.470Z info judge calm sys_avg_x100=1967
+2026-11-13T03:26:16.920Z info trigger watch start
+2026-11-13T03:26:26.921Z info judge calm sys_avg_x100=332
+2026-11-13T03:26:28.046Z info trigger watch start
+2026-11-13T03:26:38.048Z info judge calm sys_avg_x100=608
+2026-11-13T03:26:40.943Z info trigger watch start
+2026-11-13T03:26:50.943Z info judge calm sys_avg_x100=726
+2026-11-13T03:26:53.014Z info trigger watch start
+2026-11-13T03:27:11.766Z warn judge kill cand=docker-836e7d4db7bdf2992d5cdbcb54482c1f69378e3d69e86d469509684ccf85fca5.scope dry_run=0 result=0 sys_avg_x100=4070 avail_x100=0 max_bytes=679546880 growth_bytes=393216 growing=0
+2026-11-13T03:27:11.766Z info judge cand name=docker-836e7d4db7bdf2992d5cdbcb54482c1f69378e3d69e86d469509684ccf85fca5.scope max_bytes=679546880 growth_bytes=393216 ready=1 eligible=1 growing=0 grace=0 protected=0
+2026-11-13T03:27:13.551Z info trigger watch start
+2026-11-13T03:27:23.551Z info judge calm sys_avg_x100=29
+
+pressure
+some avg10=0.31 avg60=6.66 avg300=3.87 total=16250484
+full avg10=0.30 avg60=6.56 avg300=3.81 total=15987799
+hog Exited (137) 43 seconds ago

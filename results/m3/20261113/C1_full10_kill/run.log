@@ -1,0 +1,47 @@
+[13:10:16] VM 시작 (IOPS=100)
+active
+# 확인한 뒤 ExecStart의 --dry-run을 --no-dry-run으로 바꿔 실제 종료를 켠다.
+ExecStart=/usr/local/sbin/thrash-guard --config /etc/thrash-guard/thrash-guard.conf --no-dry-run
+[13:13:15] t=10 547408kB avg10=4.47 hog:Up 11 seconds 0 
+[13:13:25] t=20 506248kB avg10=1.64 hog:Up 20 seconds 0 
+[13:13:34] t=30 468456kB avg10=0.60 hog:Up 30 seconds 0 
+[13:13:44] t=40 427852kB avg10=0.22 hog:Up 40 seconds 0 
+[13:13:54] t=50 389240kB avg10=0.08 hog:Up 49 seconds 0 
+[13:14:03] t=60 347284kB avg10=0.02 hog:Up 59 seconds 0 
+[13:14:13] t=70 308260kB avg10=0.00 hog:Up About a minute 0 
+[13:14:31] t=80 223216kB avg10=0.00 hog:Up About a minute 0 
+[13:14:41] t=90 197528kB avg10=0.18 hog:Up About a minute 0 
+[13:14:51] t=100 157360kB avg10=4.06 hog:Up About a minute 0 
+[13:15:03] t=110 116388kB avg10=1.49 hog:Up 2 minutes 0 
+[13:15:20] t=120 58552kB avg10=0.36 hog:Up 2 minutes 0 
+[13:15:40] t=130  
+[13:16:02] t=140  
+[13:16:13] t=150 583988kB avg10=2.94 hog:Up 3 minutes 1 
+[13:16:23] t=160 596244kB avg10=0.88 hog:Exited (137) 35 seconds ago 1 
+[13:16:23] hog 종료 감지
+[13:16:42] ==== 데몬 로그
+Started thrash-guard: terminate a culprit cgroup under memory thrashing.
+thrash-guard 유효 설정:
+2026-11-13T04:12:47.703Z warn no cgroup under target_parent matches target_match, nothing will be terminated
+2026-11-13T04:12:47.704Z info start mode=kill
+2026-11-13T04:12:54.606Z info trigger watch start
+2026-11-13T04:13:04.607Z info judge skip reason=mem_available sys_avg_x100=2322 avail_x100=5799
+2026-11-13T04:13:06.608Z info judge calm sys_avg_x100=331
+2026-11-13T04:14:47.854Z info trigger watch start
+2026-11-13T04:14:57.855Z info judge calm sys_avg_x100=364
+2026-11-13T04:15:18.150Z info trigger watch start
+2026-11-13T04:15:28.151Z info judge calm sys_avg_x100=173
+2026-11-13T04:15:33.870Z info trigger watch start
+2026-11-13T04:15:43.871Z warn judge kill cand=docker-c70a3acf2aac137f9a31e02a0dbde27b0df6bc604ddf14dcf09d4360a08ad3f5.scope dry_run=0 result=0 sys_avg_x100=2206 avail_x100=0 max_bytes=661831680 growth_bytes=31346688 growing=1
+2026-11-13T04:15:43.871Z info judge cand name=docker-c70a3acf2aac137f9a31e02a0dbde27b0df6bc604ddf14dcf09d4360a08ad3f5.scope max_bytes=661831680 growth_bytes=31346688 ready=1 eligible=1 growing=1 grace=0 protected=0
+2026-11-13T04:15:44.446Z info trigger watch start
+2026-11-13T04:15:54.697Z info judge calm sys_avg_x100=489
+2026-11-13T04:16:10.670Z info trigger watch start
+2026-11-13T04:16:20.671Z info judge calm sys_avg_x100=0
+
+pressure
+some avg10=0.11 avg60=2.46 avg300=1.62 total=7770084
+full avg10=0.09 avg60=2.33 avg300=1.56 total=7525543
+hog Exited (137) 58 seconds ago
+2026-11-13T04:16:45.482Z info stats triggers=6 ticks=255 skips=1 calms=5 kills=1 dry_kills=0 kill_errors=0 sample_errors=0 late_ticks=0 max_delay_ms=1
+[13:16:46] psi 기록 238줄

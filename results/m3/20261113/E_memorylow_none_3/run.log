@@ -1,0 +1,72 @@
+[15:55:45] 실험 B: arm=none, VM 시작 (IOPS=100)
+active
+# 확인한 뒤 ExecStart의 --dry-run을 --no-dry-run으로 바꿔 실제 종료를 켠다.
+ExecStart=/usr/local/sbin/thrash-guard --config /etc/thrash-guard/thrash-guard.conf --dry-run
+system.slice memory.low=0 current=411MiB
+system.slice/ssh.service memory.low=0 current=9MiB
+user.slice memory.low=0 current=364MiB
+hog-started
+[15:58:25] login #1 1794553105.498563198 0.2 0 | avail=515MiB full=avg10=0.19 containers=1 
+[15:58:34] login #2 1794553113.672236366 0.3 0 | avail=514MiB full=avg10=0.06 containers=1 
+[15:58:44] login #3 1794553124.029402866 0.3 0 | avail=488MiB full=avg10=0.02 containers=1 
+[15:58:54] login #4 1794553134.315675489 0.2 0 | avail=457MiB full=avg10=0.00 containers=1 
+[15:59:02] login #5 1794553142.461916352 0.2 0 | avail=415MiB full=avg10=0.00 containers=1 
+[15:59:12] login #6 1794553152.706030075 0.2 0 | avail=381MiB full=avg10=0.00 containers=1 
+[15:59:23] login #7 1794553162.950780364 0.2 0 | avail=342MiB full=avg10=0.00 containers=1 
+[15:59:36] login #8 1794553171.190735445 4.9 0 | avail=262MiB full=avg10=0.00 containers=1 
+[15:59:46] login #9 1794553186.084801044 0.8 0 | avail=245MiB full=avg10=0.00 containers=1 
+[15:59:57] login #10 1794553196.896675146 0.5 0 | avail=208MiB full=avg10=0.00 containers=1 
+[16:00:06] login #11 1794553205.304910049 1.0 0 | avail=169MiB full=avg10=0.00 containers=1 
+[16:00:17] login #12 1794553216.310304855 0.8 0 | avail=129MiB full=avg10=0.00 containers=1 
+[16:00:27] login #13 1794553227.125322583 0.6 0 | avail=89MiB full=avg10=0.08 containers=1 
+[16:00:36] login #14 1794553235.651375134 0.6 0 | avail=54MiB full=avg10=0.83 containers=1 
+[16:01:14] login #15 1794553246.248963610 27.9 124 |  
+[16:01:29] login #16 1794553284.191003007 5.0 255 | Connection timed out during banner exchange 
+[16:01:42] login #17 1794553297.227681272 5.0 255 | Connection timed out during banner exchange 
+[16:01:57] login #18 1794553312.282745482 5.0 255 | Connection timed out during banner exchange 
+[16:02:10] login #19 1794553325.268068803 5.0 255 | Connection timed out during banner exchange 
+[16:02:25] login #20 1794553340.346558662 5.0 255 | Connection timed out during banner exchange 
+[16:02:38] login #21 1794553353.275727791 5.0 255 | Connection timed out during banner exchange 
+[16:02:53] login #22 1794553368.342299038 5.0 255 | Connection timed out during banner exchange 
+[16:03:06] login #23 1794553381.349157024 5.0 255 | Connection timed out during banner exchange 
+[16:03:21] login #24 1794553396.418484757 5.0 255 | Connection timed out during banner exchange 
+[16:03:34] login #25 1794553411.462814587 2.9 255 | Connection timed out during banner exchange 
+[16:03:46] login #26 1794553424.418659172 1.6 255 |  
+[16:04:04] login #27 1794553436.064021895 8.3 0 | avail=564MiB full=avg10=7.75 containers=0 
+[16:04:04] hog 종료 감지
+[16:04:24] ==== 결과 수집
+--- memory.events
+system.slice low=0 :: low 0 high 0 max 0 oom 0 oom_kill 1 oom_group_kill 0 
+system.slice/ssh.service low=0 :: low 0 high 0 max 0 oom 0 oom_kill 0 oom_group_kill 0 
+user.slice low=0 :: low 0 high 0 max 0 oom 0 oom_kill 0 oom_group_kill 0 
+user.slice/user-1000.slice low=0 :: low 0 high 0 max 0 oom 0 oom_kill 0 oom_group_kill 0 
+--- oom/dmesg
+[  435.038181] dockerd invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=-500
+[  435.038395] oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=docker.service,mems_allowed=0,global_oom,task_memcg=/system.slice/docker-7246bf40c21c2a924ccdcbeccb3e4fbec019ceaa8ffa20c686e6888c11994a19.scope,task=tg-load,pid=1295,uid=0
+[  435.038430] Out of memory: Killed process 1295 (tg-load) total-vm:667668kB, anon-rss:651264kB, file-rss:0kB, shmem-rss:0kB, UID:0 pgtables:1312kB oom_score_adj:0
+--- daemon
+2026-11-13T07:03:25.573Z info judge skip reason=cooldown sys_avg_x100=6669 avail_x100=0
+2026-11-13T07:03:26.573Z info judge skip reason=no_candidate sys_avg_x100=6594 avail_x100=0
+2026-11-13T07:03:26.823Z info judge skip reason=cooldown sys_avg_x100=6472 avail_x100=0
+2026-11-13T07:03:28.073Z info judge skip reason=no_candidate sys_avg_x100=6486 avail_x100=0
+2026-11-13T07:03:28.323Z info judge skip reason=cooldown sys_avg_x100=6487 avail_x100=0
+2026-11-13T07:03:28.573Z info judge skip reason=no_candidate sys_avg_x100=6458 avail_x100=0
+2026-11-13T07:03:29.823Z info judge skip reason=cooldown sys_avg_x100=6301 avail_x100=0
+2026-11-13T07:03:30.323Z info judge skip reason=no_candidate sys_avg_x100=6328 avail_x100=0
+2026-11-13T07:03:30.823Z info judge skip reason=cooldown sys_avg_x100=6485 avail_x100=0
+2026-11-13T07:03:31.823Z info judge skip reason=no_candidate sys_avg_x100=6629 avail_x100=0
+2026-11-13T07:03:33.074Z info judge skip reason=cooldown sys_avg_x100=6873 avail_x100=0
+2026-11-13T07:03:33.823Z info judge skip reason=no_candidate sys_avg_x100=6455 avail_x100=0
+2026-11-13T07:03:34.823Z info judge skip reason=cooldown sys_avg_x100=6874 avail_x100=0
+2026-11-13T07:03:35.323Z info judge skip reason=no_candidate sys_avg_x100=7054 avail_x100=0
+2026-11-13T07:03:36.073Z info judge skip reason=cooldown sys_avg_x100=7424 avail_x100=0
+2026-11-13T07:03:36.573Z info judge skip reason=no_candidate sys_avg_x100=7715 avail_x100=0
+2026-11-13T07:03:39.073Z info judge skip reason=mem_available sys_avg_x100=8067 avail_x100=6208
+2026-11-13T07:03:48.823Z info judge calm sys_avg_x100=439
+2026-11-13T07:04:01.768Z info trigger watch start
+2026-11-13T07:04:11.769Z info judge calm sys_avg_x100=10
+2026-11-13T07:04:24.236Z info stats triggers=6 ticks=739 skips=131 calms=3 kills=0 dry_kills=3 kill_errors=0 sample_errors=0 late_ticks=0 max_delay_ms=3
+--- pressure
+some avg10=1.05 avg60=29.45 avg300=22.20 total=97162873
+full avg10=1.04 avg60=29.18 avg300=22.02 total=96220720
+[16:04:26] psi 기록 375줄, 완료

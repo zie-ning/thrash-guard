@@ -1,0 +1,40 @@
+[12:42:38] VM 시작 (IOPS=100)
+active
+# 확인한 뒤 ExecStart의 --dry-run을 --no-dry-run으로 바꿔 실제 종료를 켠다.
+ExecStart=/usr/local/sbin/thrash-guard --config /etc/thrash-guard/thrash-guard.conf --dry-run
+[12:45:36] t=10 537316kB avg10=0.06 hog:Up 11 seconds 0 
+[12:45:46] t=20 491472kB avg10=0.02 hog:Up 20 seconds 0 
+[12:45:55] t=30 463820kB avg10=0.00 hog:Up 30 seconds 0 
+[12:46:05] t=40 424384kB avg10=0.00 hog:Up 40 seconds 0 
+[12:46:15] t=50 388352kB avg10=0.00 hog:Up 50 seconds 0 
+[12:46:24] t=60 348064kB avg10=0.00 hog:Up 59 seconds 0 
+[12:46:39] t=70 271164kB avg10=0.00 hog:Up About a minute 0 
+[12:46:51] t=80 247512kB avg10=0.00 hog:Up About a minute 0 
+[12:47:04] t=90 200360kB avg10=0.00 hog:Up About a minute 0 
+[12:47:16] t=100 145976kB avg10=0.33 hog:Up About a minute 0 
+[12:47:26] t=110 97948kB avg10=0.23 hog:Up 2 minutes 0 
+[12:47:38] t=120 55524kB avg10=0.16 hog:Up 2 minutes 0 
+[12:47:58] t=130  
+[12:48:13] t=140 Connection timed out during banner exchange 
+[12:48:34] t=150  
+[12:48:44] t=160 586404kB avg10=0.65 hog:Exited (137) 30 seconds ago 0 
+[12:48:44] hog 종료 감지
+[12:49:02] ==== 데몬 로그
+Started thrash-guard: terminate a culprit cgroup under memory thrashing.
+thrash-guard 유효 설정:
+2026-11-13T03:45:08.900Z warn no cgroup under target_parent matches target_match, nothing will be terminated
+2026-11-13T03:45:08.901Z info start mode=dry-run
+2026-11-13T03:47:55.399Z info trigger watch start
+2026-11-13T03:48:05.650Z info judge calm sys_avg_x100=1929
+2026-11-13T03:48:05.759Z info trigger watch start
+2026-11-13T03:48:15.759Z info judge calm sys_avg_x100=856
+[  288.598677] containerd-shim invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=-998
+[  288.598989] oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=containerd.service,mems_allowed=0,global_oom,task_memcg=/system.slice/docker-a991bc2189b4ae2e5657b6f8a9b4b7d8fbb4245d5f79507c76264873b9647919.scope,task=tg-load,pid=1230,uid=0
+[  288.599024] Out of memory: Killed process 1230 (tg-load) total-vm:667668kB, anon-rss:654080kB, file-rss:0kB, shmem-rss:0kB, UID:0 pgtables:1320kB oom_score_adj:0
+
+pressure
+some avg10=0.09 avg60=1.97 avg300=0.92 total=3751951
+full avg10=0.08 avg60=1.92 avg300=0.90 total=3657586
+hog Exited (137) 50 seconds ago
+2026-11-13T03:49:04.043Z info stats triggers=2 ticks=83 skips=0 calms=2 kills=0 dry_kills=0 kill_errors=0 sample_errors=0 late_ticks=0 max_delay_ms=1
+[12:49:04] psi 기록 236줄

@@ -1,0 +1,37 @@
+1794555084.357433351 0.3 0 | avail=478MiB full=avg10=0.00 containers=1 
+1794555094.652020191 0.4 0 | avail=446MiB full=avg10=0.00 containers=1 
+1794555105.058445910 0.5 0 | avail=394MiB full=avg10=1.99 containers=1 
+1794555113.394523403 0.2 0 | avail=410MiB full=avg10=1.14 containers=1 
+1794555123.619022304 0.2 0 | avail=400MiB full=avg10=0.41 containers=1 
+1794555133.891097829 1.4 0 | avail=338MiB full=avg10=0.15 containers=1 
+1794555143.199562051 0.2 0 | avail=323MiB full=avg10=0.05 containers=1 
+1794555153.481644982 0.2 0 | avail=299MiB full=avg10=0.01 containers=1 
+1794555163.750139758 0.2 0 | avail=258MiB full=avg10=0.00 containers=1 
+1794555174.007560682 0.2 0 | avail=220MiB full=avg10=0.00 containers=1 
+1794555182.148890335 0.2 0 | avail=185MiB full=avg10=0.00 containers=1 
+1794555192.396784466 0.4 0 | avail=147MiB full=avg10=0.00 containers=1 
+1794555202.861984878 1.1 0 | avail=85MiB full=avg10=0.00 containers=1 
+1794555211.908186586 0.2 0 | avail=69MiB full=avg10=0.00 containers=1 
+1794555222.168141791 0.2 0 | avail=41MiB full=avg10=0.00 containers=1 
+1794555232.442676235 0.3 0 | avail=23MiB full=avg10=0.00 containers=1 
+1794555240.651665947 27.9 124 |  
+1794555278.528898077 5.0 255 | Connection timed out during banner exchange 
+1794555293.566558803 2.9 255 | Connection timed out during banner exchange 
+1794555306.488954360 5.0 255 | Connection timed out during banner exchange 
+1794555321.534152793 5.0 255 | Connection timed out during banner exchange 
+1794555334.443980502 5.0 255 | Connection timed out during banner exchange 
+1794555349.505091269 5.0 255 | Connection timed out during banner exchange 
+1794555364.559131506 5.0 255 | Connection timed out during banner exchange 
+1794555376.526808356 5.0 255 | Connection timed out during banner exchange 
+1794555391.611013111 5.0 255 | Connection timed out during banner exchange 
+1794555404.745938216 5.0 255 | Connection timed out during banner exchange 
+1794555419.805914706 5.0 255 | Connection timed out during banner exchange 
+1794555432.774055609 5.0 255 | Connection timed out during banner exchange 
+1794555447.826436074 5.0 255 | Connection timed out during banner exchange 
+1794555462.878207207 2.8 255 | Connection timed out during banner exchange 
+1794555475.707771677 5.0 255 | Connection timed out during banner exchange 
+1794555490.743300026 2.9 255 | Connection timed out during banner exchange 
+1794555503.685437635 5.0 255 | Connection timed out during banner exchange 
+1794555518.743740681 2.9 255 | Connection timed out during banner exchange 
+1794555531.656176331 5.0 255 | Connection timed out during banner exchange 
+1794555546.703194137 7.1 0 | avail=585MiB full=avg10=4.21 containers=0 
