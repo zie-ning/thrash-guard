@@ -1,0 +1,49 @@
+[17:37:34] 실험 C: mode=kill, VM 시작 (IOPS=3000, BPS=10900000)
+active
+# 확인한 뒤 ExecStart의 --dry-run을 --no-dry-run으로 바꿔 실제 종료를 켠다.
+ExecStart=/usr/local/sbin/thrash-guard --config /etc/thrash-guard/thrash-guard.conf --no-dry-run
+system.slice memory.low=0 current=417MiB
+system.slice/ssh.service memory.low=0 current=9MiB
+user.slice memory.low=0 current=256MiB
+hog-started
+[17:38:46] login #1 1794559125.722116185 0.3 0 | avail=475MiB full=avg10=0.00 containers=1 
+[17:38:56] login #2 1794559136.026985686 0.3 0 | avail=436MiB full=avg10=0.00 containers=1 
+[17:39:05] login #3 1794559144.619565428 0.5 0 | avail=394MiB full=avg10=0.00 containers=1 
+[17:39:15] login #4 1794559155.157987517 0.2 0 | avail=410MiB full=avg10=3.30 containers=1 
+[17:39:25] login #5 1794559165.412304700 0.2 0 | avail=398MiB full=avg10=1.48 containers=1 
+[17:39:34] login #6 1794559173.850732640 0.3 0 | avail=377MiB full=avg10=0.54 containers=1 
+[17:39:45] login #7 1794559184.193792900 0.8 0 | avail=318MiB full=avg10=0.20 containers=1 
+[17:39:55] login #8 1794559195.022193323 0.2 0 | avail=298MiB full=avg10=0.07 containers=1 
+[17:40:03] login #9 1794559203.515804461 0.3 0 | avail=259MiB full=avg10=0.02 containers=1 
+[17:40:14] login #10 1794559213.819662858 0.3 0 | avail=218MiB full=avg10=0.00 containers=1 
+[17:40:24] login #11 1794559224.145119303 0.7 0 | avail=179MiB full=avg10=0.00 containers=1 
+[17:40:33] login #12 1794559232.897963414 0.2 0 | avail=141MiB full=avg10=0.00 containers=1 
+[17:40:43] login #13 1794559243.167531180 0.2 0 | avail=105MiB full=avg10=0.14 containers=1 
+[17:40:54] login #14 1794559253.439162249 1.2 0 | avail=53MiB full=avg10=0.21 containers=1 
+[17:41:03] login #15 1794559262.905477348 0.3 0 | avail=54MiB full=avg10=0.07 containers=1 
+[17:41:13] login #16 1794559273.206365302 0.7 0 | avail=26MiB full=avg10=0.02 containers=1 
+[17:41:28] login #17 1794559283.914712731 5.0 255 | Connection timed out during banner exchange 
+[17:41:44] login #18 1794559297.183083242 6.8 0 | avail=589MiB full=avg10=3.13 containers=0 
+[17:41:44] hog 종료 감지
+[17:42:04] ==== 결과 수집
+--- memory.events
+system.slice low=0 :: low 0 high 0 max 0 oom 0 oom_kill 0 oom_group_kill 0 
+system.slice/ssh.service low=0 :: low 0 high 0 max 0 oom 0 oom_kill 0 oom_group_kill 0 
+user.slice low=0 :: low 0 high 0 max 0 oom 0 oom_kill 0 oom_group_kill 0 
+user.slice/user-1000.slice low=0 :: low 0 high 0 max 0 oom 0 oom_kill 0 oom_group_kill 0 
+--- oom/dmesg
+--- daemon
+Started thrash-guard: terminate a culprit cgroup under memory thrashing.
+thrash-guard 유효 설정:
+2026-11-13T08:38:36.011Z warn no cgroup under target_parent matches target_match, nothing will be terminated
+2026-11-13T08:38:36.011Z info start mode=kill
+2026-11-13T08:39:07.073Z info trigger watch start
+2026-11-13T08:39:18.824Z info judge calm sys_avg_x100=1 io_avg_x100=1693
+2026-11-13T08:41:25.202Z info trigger watch start
+2026-11-13T08:41:35.206Z warn judge kill cand=docker-386c582c47ff3c827cebfa2087478be1427aa149c97f464a9d2adda4f77c795a.scope dry_run=0 result=0 path=io sys_avg_x100=952 io_avg_x100=9002 avail_x100=0 max_bytes=684056576 growth_bytes=12955648 growing=1
+2026-11-13T08:41:35.206Z info judge cand name=docker-386c582c47ff3c827cebfa2087478be1427aa149c97f464a9d2adda4f77c795a.scope max_bytes=684056576 growth_bytes=12955648 ready=1 eligible=1 growing=1 grace=0 protected=0
+2026-11-13T08:42:03.962Z info stats triggers=2 ticks=89 skips=0 calms=1 kills=1 dry_kills=0 kill_errors=0 sample_errors=0 late_ticks=0 max_delay_ms=1
+--- pressure
+some avg10=0.44 avg60=1.27 avg300=0.53 total=2289315
+full avg10=0.42 avg60=1.21 avg300=0.50 total=2236113
+[17:42:04] psi 기록 209줄, 완료
