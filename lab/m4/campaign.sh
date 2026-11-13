@@ -10,6 +10,8 @@
 #   --reps N         회차 수 (기본 3)
 #   --list           돌릴 목록만 보여 준다
 #   --               이후의 옵션은 모든 run.sh 호출에 그대로 넘긴다 (예: -- --burst-mib 450)
+#
+# 모두 끝나면 결과 루트에 summary.md, summary.json과 부하마다 resolve_time_<부하>.svg를 만든다(lab/analyze/m4_summary.py).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -56,6 +58,11 @@ for item in "${plan[@]}"; do
         failed+=("$id")
     fi
 done
+
+# 끝나면 요약표, 합불 판정, 그래프를 만든다 (lab/analyze/m4_summary.py). 실패해도 실행 결과는 그대로 남는다.
+if [ "$LIST" != 1 ]; then
+    python3 "$ROOT/lab/analyze/m4_summary.py" "$OUT_ROOT" || echo "요약을 만들지 못했다. 직접 실행: python3 lab/analyze/m4_summary.py $OUT_ROOT" >&2
+fi
 
 if [ "${#failed[@]}" -gt 0 ]; then
     echo "실패한 실행: ${failed[*]}" >&2

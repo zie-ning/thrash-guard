@@ -62,7 +62,7 @@ VM 검증(2026-11-13, 원본 `results/m3/20261113/`): 서비스 기동, 컨테�
 필수 프로세스 E와 부하 하나(`RUNAWAY_GROWTH`, `SPIKE_MEM`, 정상 버스트)를 함께 두고 데몬 dry-run(꺼짐 대용)과 켜짐을 3회씩 비교한다(Facebook oomd 글의 합성 테스트를 줄인 방식, 그래프도 같은 모양). 합격은 결과로 판단하고,
 누가 종료됐는지는 기록 지표다. 자세한 내용은 [validation/overview.md](validation/overview.md). 완료 조건은 보고서 `docs/reports/M4-validation.md`에 V1~V5가 실측과 추론을 구분해 판정되고, 임계값 재보정 후보와 후속 개선 항목이 정리되는 것이다. 기준 디스크 조건은 처리량 약 10.9 MB/s 제한이다. 한 실행은 T0 이후 최대 5분이고, 모두 15회(폭주 2종 × 2조건 × 3회 + 정상 버스트 dry-run 3회)다. `memory.min` 소량 선택 시험과 데몬 `mlock` 대조군(이슈 #6)은 M4 밖의 선택 시험으로 둔다.
 
-하네스: 실행 1회는 `lab/m4/run.sh`, 회차 전체는 `lab/m4/campaign.sh`, 결과 계산은 `lab/analyze/m4_analyze.py`(단위 테스트 `tests/test_m4_analyze.py`)다. 분석기는 합성 데이터 단위 테스트와 VM 스모크 2회(`runaway_growth` 켜짐·dry-run, `results/m4/smoke/`), 예비 실행(`results/m4/prelim/`)으로 확인했다. 실행 결과를 그래프와 표로 모으는 집계기는 아직 없다.
+하네스: 실행 1회는 `lab/m4/run.sh`, 회차 전체는 `lab/m4/campaign.sh`, 결과 계산은 `lab/analyze/m4_analyze.py`(단위 테스트 `tests/test_m4_analyze.py`)다. 분석기는 합성 데이터 단위 테스트와 VM 스모크 2회(`runaway_growth` 켜짐·dry-run, `results/m4/smoke/`), 예비 실행(`results/m4/prelim/`)으로 확인했다. 집계기 `lab/analyze/m4_summary.py`(단위 테스트 `tests/test_m4_summary.py`)가 실행 결과를 모아 요약표, 합불 판정, 막대 그래프를 만든다. 합성 데이터와 스모크·예비 실행 기록으로만 확인했고 본 실행에는 아직 쓰지 않았다.
 
 ## 후속 (M5, M7)
 
