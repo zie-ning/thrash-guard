@@ -42,6 +42,7 @@ static void sim_init(struct sim *s, uint32_t nc)
 {
     memset(s, 0, sizeof(*s));
     tg_config_defaults(&s->cfg);
+    s->cfg.full_pct = 40; /* 시험의 숫자는 X=40%를 전제로 한다. 기본값(10%)과는 별개다 */
     tg_policy_init(&s->pol, s->cfg.cooldown_sec, s->cfg.max_kills_per_hour);
     tg_judge_init(&s->j, &s->cfg);
     s->now = SEC(1000);

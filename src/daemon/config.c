@@ -24,7 +24,7 @@ void tg_config_defaults(struct tg_config *cfg)
     strcpy(cfg->target_match, "docker-*.scope,libpod-*.scope,cri-containerd-*.scope,crio-*.scope");
     cfg->trigger_stall_us = 150000;
     cfg->trigger_window_us = 1000000;
-    cfg->full_pct = 40;
+    cfg->full_pct = 10; /* 임시 초기값. 정상 버스트 실험으로 조정한다 */
     cfg->sustain_sec = 10;
     cfg->sample_interval_ms = 250;
     cfg->mem_avail_pct = 10;
