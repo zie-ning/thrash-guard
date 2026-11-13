@@ -51,6 +51,7 @@ static void print_config(const struct tg_config *c, bool foreground)
             "  target_match=%s\n"
             "  trigger: full %u/%u us\n"
             "  판단: 최근 %u초 평균 full >= %u%% (샘플 %u ms, %u칸)\n"
+            "  io 경로: 평균 io full >= %u%% 이고 가용 메모리 <= %u%% (0이면 끔)\n"
             "  안전장치: grace %u초, cooldown %u초, 시간당 최대 %u회\n"
             "  로그: %s (링버퍼 %u KiB)\n"
             "  자기 보호: mlock=%s, oom_score_adj=%d\n",
@@ -58,7 +59,8 @@ static void print_config(const struct tg_config *c, bool foreground)
             foreground ? ", foreground" : "", c->target_parent, c->target_match,
             (unsigned)c->trigger_stall_us, (unsigned)c->trigger_window_us,
             (unsigned)c->sustain_sec, (unsigned)c->full_pct, (unsigned)c->sample_interval_ms,
-            (unsigned)tg_config_window_samples(c), (unsigned)c->startup_grace_sec,
+            (unsigned)tg_config_window_samples(c), (unsigned)c->io_full_pct, (unsigned)c->io_mem_avail_pct,
+            (unsigned)c->startup_grace_sec,
             (unsigned)c->cooldown_sec, (unsigned)c->max_kills_per_hour,
             c->log_path[0] != '\0' ? c->log_path : "표준 오류", (unsigned)c->log_ring_kb,
             c->mlock ? "yes" : "no", (int)c->oom_score_adj);
@@ -162,11 +164,14 @@ static int run_daemon(const struct tg_config *cfg)
     }
 
     rc = tg_engine_init(&g_engine, cfg, &g_log, &g_scanner, "/proc/pressure/memory",
-                        "/proc/meminfo");
+                        "/proc/pressure/io", "/proc/meminfo");
     if (rc != 0) {
         fprintf(stderr, "thrash-guard: 엔진 초기화 실패: %s\n", strerror(-rc));
         goto fail_scanner;
     }
+
+    if (cfg->io_full_pct > 0 && g_engine.reader.io_fd < 0)
+        log_msg(TG_LOG_WARN, "/proc/pressure/io unavailable, io path disabled");
 
     trigger_fd = tg_psi_trigger_open(cfg->trigger_stall_us, cfg->trigger_window_us);
     if (trigger_fd < 0) {

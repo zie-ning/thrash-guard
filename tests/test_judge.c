@@ -3,6 +3,7 @@
  *
  * 실제 시계나 /proc 없이 숫자만으로 상황을 재현한다. 한 샘플은 250 ms이고,
  * "pct%"는 그 250 ms 중 pct%를 시스템 full stall로 보냈다는 뜻이다.
+ * io 경로 시험은 Z=50%, Y_io=5%를 쓴다.
  * 기본 설정: N=10초(40칸), X=40%, Y=10%, 자격 10%, 증가 인정 1%, 유예 30초, 쿨다운 60초.
  * 전체 메모리는 1 GiB로 가정한다(자격 약 102 MiB, 증가 인정 약 10 MiB).
  * 첫 샘플은 시스템 full의 기준점만 잡으므로 시스템 윈도는 41번째 샘플에서 처음 찬다.
@@ -33,6 +34,9 @@ struct sim {
     uint64_t first_seen[NC];
     bool prot[NC];
     uint32_t nc;
+    bool io_on;          /* io 압력 샘플을 넘긴다 */
+    uint64_t io_us;      /* io full 누적 */
+    uint32_t io_tick_pct; /* 한 샘플(250 ms) 중 io full 비율 */
     uint32_t absent; /* 비트가 켜진 후보는 이번 샘플에서 빠진다 */
     struct tg_cand_sample cs[NC];
     int ticks;
@@ -72,6 +76,9 @@ static struct tg_decision sim_tick(struct sim *s, uint32_t sys_pct)
     }
     smp.now_ns = s->now;
     smp.sys_full_total_us = s->sys_us;
+    s->io_us += s->io_tick_pct * PCT_US;
+    smp.io_valid = s->io_on;
+    smp.io_full_total_us = s->io_us;
     smp.mem_available_bytes = s->avail;
     smp.mem_total_bytes = s->total;
     smp.cand = s->cs;
@@ -699,6 +706,137 @@ static void test_irregular_interval(void)
     TG_CHECK_EQ_U64(d.sys_avg_x100, 4000);
 }
 
+/* ---------- io 경로 ---------- */
+
+/* io 경로 시험용: memory full은 낮고(3%) io full이 높은 굳어진 livelock. X=40%, Z=50%, Y=10%, Y_io=5% */
+static void sim_io_init(struct sim *s, uint32_t io_pct)
+{
+    sim_init(s, 1);
+    s->io_on = true;
+    s->io_tick_pct = io_pct;
+    tg_judge_trigger(&s->j);
+}
+
+static void test_io_path_kills_when_memory_is_low(void)
+{
+    struct sim s;
+    struct tg_decision d;
+
+    sim_io_init(&s, 80);
+    d = run_until(&s, 100, 3);
+    TG_CHECK_EQ_U64(s.ticks, 41); /* memory 경로와 같은 최소 감지 지연 */
+    TG_CHECK(d.kind == TG_J_KILL);
+    TG_CHECK(d.path == TG_PATH_IO);
+    TG_CHECK_EQ_U64(d.sys_avg_x100, 300);
+    TG_CHECK_EQ_U64(d.io_avg_x100, 8000);
+}
+
+static void test_memory_path_is_preferred(void)
+{
+    struct sim s;
+    struct tg_decision d;
+
+    sim_io_init(&s, 80);
+    d = run_until(&s, 100, 50);
+    TG_CHECK(d.kind == TG_J_KILL);
+    TG_CHECK(d.path == TG_PATH_MEM); /* 둘 다 충족하면 기존 memory 경로로 기록한다 */
+}
+
+static void test_io_path_needs_lower_availability(void)
+{
+    struct sim s;
+    struct tg_decision d;
+
+    /* 가용 메모리 7%: memory 경로의 10% 보호선 이하이지만 io 경로의 5% 보호선보다 많다 */
+    sim_io_init(&s, 80);
+    s.avail = MIB(72);
+    d = run_until(&s, 100, 3);
+    TG_CHECK(d.kind == TG_J_SKIP);
+    TG_CHECK(d.reason == TG_R_MEM_AVAILABLE);
+    TG_CHECK(d.path == TG_PATH_NONE);
+
+    /* 같은 가용 메모리에서 memory full이 높으면 memory 경로로 종료한다 */
+    sim_io_init(&s, 80);
+    s.avail = MIB(72);
+    d = run_until(&s, 100, 50);
+    TG_CHECK(d.kind == TG_J_KILL);
+    TG_CHECK(d.path == TG_PATH_MEM);
+}
+
+static void test_io_high_with_plenty_of_memory_does_not_kill(void)
+{
+    struct sim s;
+    struct tg_decision d;
+
+    /* 정상적인 대용량 I/O: io full은 높지만 가용 메모리가 충분하다 */
+    sim_io_init(&s, 90);
+    s.avail = MIB(500);
+    d = run_until(&s, 100, 1);
+    TG_CHECK(d.kind == TG_J_SKIP);
+    TG_CHECK(d.reason == TG_R_MEM_AVAILABLE);
+}
+
+static void test_calm_needs_both_signals_low(void)
+{
+    struct sim s;
+    struct tg_decision d;
+
+    /* memory는 가라앉았지만 io가 Z/2(25%) 이상이면 관찰을 끝내지 않는다 */
+    sim_io_init(&s, 30);
+    d = run_until(&s, 100, 3);
+    TG_CHECK(d.kind == TG_J_WATCHING);
+
+    /* io도 가라앉으면 끝낸다 */
+    sim_io_init(&s, 10);
+    d = run_until(&s, 100, 3);
+    TG_CHECK(d.kind == TG_J_IDLE);
+    TG_CHECK(d.reason == TG_R_CALM);
+}
+
+static void test_io_path_can_be_turned_off(void)
+{
+    struct sim s;
+    struct tg_decision d;
+
+    sim_init(&s, 1);
+    s.cfg.io_full_pct = 0;
+    tg_judge_init(&s.j, &s.cfg);
+    s.io_on = true;
+    s.io_tick_pct = 90;
+    tg_judge_trigger(&s.j);
+    d = run_until(&s, 100, 3);
+    TG_CHECK(d.kind == TG_J_IDLE); /* io를 보지 않으므로 memory 3%는 그냥 진정이다 */
+    TG_CHECK(d.reason == TG_R_CALM);
+    TG_CHECK_EQ_U64(d.io_avg_x100, 0);
+}
+
+static void test_io_sample_missing_is_ignored(void)
+{
+    struct sim s;
+    struct tg_decision d;
+
+    /* 설정은 켜져 있지만 샘플에 io 값이 없으면(io 압력 파일이 없음) 끈 것처럼 동작한다 */
+    sim_io_init(&s, 90);
+    s.io_on = false;
+    d = run_until(&s, 100, 3);
+    TG_CHECK(d.kind == TG_J_IDLE);
+    TG_CHECK(d.reason == TG_R_CALM);
+}
+
+static void test_io_counter_reset(void)
+{
+    struct sim s;
+    struct tg_decision d;
+
+    sim_io_init(&s, 80);
+    for (int i = 0; i < 20; i++)
+        sim_tick(&s, 3);
+    s.io_us = 0; /* 누적값이 줄었다. 그 칸은 0으로 보고 이후 증가분은 정상으로 센다 */
+    d = run_until(&s, 100, 3);
+    TG_CHECK(d.kind == TG_J_KILL);
+    TG_CHECK(d.path == TG_PATH_IO);
+}
+
 static void test_names(void)
 {
     TG_CHECK(strcmp(tg_judge_reason_name(TG_R_NO_CULPRIT), "no_culprit") == 0);
@@ -706,6 +844,9 @@ static void test_names(void)
     TG_CHECK(strcmp(tg_judge_reason_name(TG_R_MEM_AVAILABLE), "mem_available") == 0);
     TG_CHECK(strcmp(tg_judge_kind_name(TG_J_KILL), "kill") == 0);
     TG_CHECK(strcmp(tg_judge_kind_name(TG_J_SKIP), "skip") == 0);
+    TG_CHECK(strcmp(tg_judge_path_name(TG_PATH_IO), "io") == 0);
+    TG_CHECK(strcmp(tg_judge_path_name(TG_PATH_MEM), "mem") == 0);
+    TG_CHECK(strcmp(tg_judge_path_name(TG_PATH_NONE), "none") == 0);
 }
 
 int main(void)
@@ -737,6 +878,14 @@ int main(void)
     TG_RUN(test_recreated_cgroup_restarts_window);
     TG_RUN(test_candidate_disappears);
     TG_RUN(test_irregular_interval);
+    TG_RUN(test_io_path_kills_when_memory_is_low);
+    TG_RUN(test_memory_path_is_preferred);
+    TG_RUN(test_io_path_needs_lower_availability);
+    TG_RUN(test_io_high_with_plenty_of_memory_does_not_kill);
+    TG_RUN(test_calm_needs_both_signals_low);
+    TG_RUN(test_io_path_can_be_turned_off);
+    TG_RUN(test_io_sample_missing_is_ignored);
+    TG_RUN(test_io_counter_reset);
     TG_RUN(test_names);
     return tg_test_finish();
 }

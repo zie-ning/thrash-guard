@@ -9,11 +9,15 @@
  *
  * 흐름:
  *   대기 -- tg_judge_trigger --> 관찰
- *   관찰: 샘플마다 시스템 full 증가분과 후보별 사용량을 최근 N초 윈도에 쌓는다.
- *     - 시스템 평균 full < X/2         -> 대기로 복귀 (CALM)
- *     - X/2 <= 평균 < X                -> 계속 관찰
- *     - 평균 >= X                      -> MemAvailable이 전체의 Y% 이하인지 확인
- *         Y% 초과면 건너뜀(MEM_AVAILABLE). 이하면 후보를 고른다.
+ *   관찰: 샘플마다 시스템 memory full, io full 증가분과 후보별 사용량을 최근 N초 윈도에 쌓는다.
+ *     두 경로 중 하나가 충족되면 종료를 검토한다(io 경로는 io_full_pct=0이면 꺼진다).
+ *       memory 경로: 평균 memory full >= X          이고 MemAvailable <= Y%
+ *       io 경로    : 평균 io full     >= Z          이고 MemAvailable <= Y_io%
+ *       굳어진 livelock에서는 memory full이 낮아지고 io full이 높아져서 memory 경로만으로는 놓친다.
+ *     - 평균 memory full < X/2 이고 (io 경로가 꺼졌거나 평균 io full < Z/2) -> 대기로 복귀 (CALM)
+ *     - 두 경로 모두 미충족, CALM도 아님  -> 계속 관찰
+ *     - 어느 경로의 평균 조건을 충족했으나 그 경로의 MemAvailable 조건을 못 채우면 건너뜀(MEM_AVAILABLE)
+ *     - 충족하면 후보를 고른다.
  *   후보 선택:
  *     제외: 보호된 후보, 유예 중인 후보, 윈도가 덜 찬 후보
  *     자격: 윈도 안 최대 사용량이 전체 메모리의 min_size_pct 이상
@@ -62,6 +66,13 @@ struct tg_judge_slot {
     struct tg_memwin mem;
 };
 
+/* 종료를 결정한 경로. memory 경로가 충족되면 io 경로보다 먼저 쓴다. */
+enum tg_judge_path {
+    TG_PATH_NONE = 0,
+    TG_PATH_MEM,
+    TG_PATH_IO,
+};
+
 enum tg_judge_reason {
     TG_R_NONE = 0,
     TG_R_CALM,          /* 압력이 가라앉아 관찰을 끝냈다 */
@@ -95,7 +106,9 @@ struct tg_decision {
     enum tg_judge_kind kind;
     enum tg_judge_reason reason;
     int32_t cand_index;      /* KILL일 때 샘플 후보 배열의 번호, 아니면 -1 */
-    uint32_t sys_avg_x100;   /* 시스템 평균 full. 윈도가 덜 찼으면 0 */
+    uint32_t sys_avg_x100;   /* 시스템 평균 memory full. 윈도가 덜 찼으면 0 */
+    uint32_t io_avg_x100;    /* 시스템 평균 io full. io 경로가 꺼졌거나 윈도가 덜 찼으면 0 */
+    enum tg_judge_path path; /* 평균 조건과 MemAvailable 조건을 모두 충족한 경로. 건너뜀이면 NONE */
     uint32_t avail_x100;     /* MemAvailable / 전체 메모리 (100배한 %). 확인 전이면 0 */
     uint64_t cand_max_bytes; /* KILL일 때 선택된 후보의 값 */
     uint64_t cand_growth_bytes;
@@ -109,6 +122,8 @@ struct tg_judge {
     uint64_t span_us; /* 윈도가 대표하는 시간(칸 수 x 샘플 간격). 샘플 사이가 이보다 벌어지면 윈도를 버린다 */
     uint32_t full_pct;
     uint32_t mem_avail_pct;
+    uint32_t io_pct;       /* Z. 0이면 io 경로 꺼짐 */
+    uint32_t io_avail_pct; /* Y_io */
     uint32_t min_size_pct;
     uint32_t min_growth_pct;
     uint32_t grace_sec;
@@ -119,7 +134,9 @@ struct tg_judge {
     bool sys_has_prev;
     uint64_t sys_prev_total_us;
     uint64_t sys_prev_now_ns;
-    struct tg_win sys_full; /* 시스템 full stall 증가분(us) */
+    uint64_t io_prev_total_us;
+    struct tg_win sys_full; /* 시스템 memory full stall 증가분(us) */
+    struct tg_win io_full;  /* 시스템 io full stall 증가분(us). sys_dt를 함께 쓴다 */
     struct tg_win sys_dt;   /* 샘플 간 경과 시간(us) */
 
     struct tg_judge_slot slot[TG_MAX_TARGETS];
@@ -139,6 +156,8 @@ struct tg_cand_sample {
 struct tg_sample {
     uint64_t now_ns;
     uint64_t sys_full_total_us;  /* /proc/pressure/memory full total */
+    bool io_valid;               /* io_full_total_us가 유효하다 */
+    uint64_t io_full_total_us;   /* /proc/pressure/io full total */
     uint64_t mem_available_bytes;
     uint64_t mem_total_bytes;
     bool targets_stale; /* 후보 표를 마지막으로 계산한 지 너무 오래됐다 */
@@ -164,6 +183,7 @@ struct tg_decision tg_judge_tick(struct tg_judge *j, const struct tg_sample *s,
 const struct tg_cand_stat *tg_judge_stats(const struct tg_judge *j, uint32_t *n);
 
 const char *tg_judge_reason_name(enum tg_judge_reason r);
+const char *tg_judge_path_name(enum tg_judge_path p);
 const char *tg_judge_kind_name(enum tg_judge_kind k);
 
 #endif /* TG_JUDGE_H */

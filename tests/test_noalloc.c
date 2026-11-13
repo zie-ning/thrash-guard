@@ -89,6 +89,7 @@ void *aligned_alloc(size_t a, size_t n)
 
 static char root[64];
 static char psi_path[128];
+static char io_path[128];
 static char mem_path[128];
 static char parent[128];
 
@@ -142,6 +143,17 @@ static void set_full(uint64_t total_us)
     write_file(psi_path, s);
 }
 
+static void set_io(uint64_t total_us)
+{
+    char s[256];
+
+    snprintf(s, sizeof(s),
+             "some avg10=0.00 avg60=0.00 avg300=0.00 total=0\n"
+             "full avg10=0.00 avg60=0.00 avg300=0.00 total=%llu\n",
+             (unsigned long long)total_us);
+    write_file(io_path, s);
+}
+
 static void sleep_ms(long ms)
 {
     struct timespec ts = {ms / 1000, (ms % 1000) * 1000000L};
@@ -180,6 +192,7 @@ static void test_no_alloc_after_init(void)
     mk_cg("B", MIB(50));
     write_file(psi_path, "some avg10=0.00 avg60=0.00 avg300=0.00 total=0\n"
                          "full avg10=0.00 avg60=0.00 avg300=0.00 total=0\n");
+    set_io(0);
     write_file(mem_path, "MemTotal:        1048576 kB\nMemFree:          100000 kB\n"
                          "MemAvailable:      51200 kB\n");
 
@@ -195,7 +208,7 @@ static void test_no_alloc_after_init(void)
     o.sink = count_sink;
     TG_CHECK(tg_log_open(&lg, &o) == 0);
     TG_CHECK(tg_scanner_start(&sc, parent, NULL, 50) == 0); /* 50 ms마다 재스캔 */
-    TG_CHECK(tg_engine_init(&eng, &cfg, &lg, &sc, psi_path, mem_path) == 0);
+    TG_CHECK(tg_engine_init(&eng, &cfg, &lg, &sc, psi_path, io_path, mem_path) == 0);
     now = tg_now_ns();
     sleep_ms(100); /* 스레드가 자리를 잡게 한다 */
 
@@ -207,6 +220,7 @@ static void test_no_alloc_after_init(void)
     for (int i = 0; i < 6; i++) { /* 압력 지속 -> 종료 결정 -> cgroup.kill 쓰기 */
         full += FULL60_US;
         set_full(full);
+        set_io(full);
         tg_engine_tick(&eng, now);
         now += TICK_NS;
     }
@@ -235,6 +249,7 @@ int main(void)
         return 1;
     }
     snprintf(psi_path, sizeof(psi_path), "%s/psi", root);
+    snprintf(io_path, sizeof(io_path), "%s/io", root);
     snprintf(mem_path, sizeof(mem_path), "%s/meminfo", root);
     snprintf(parent, sizeof(parent), "%s/cg", root);
 

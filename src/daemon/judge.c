@@ -55,6 +55,7 @@ static void sys_trim(struct tg_judge *j)
         if (j->sys_dt.sum - j->sys_dt.v[idx] < j->span_us)
             break;
         win_pop_oldest(&j->sys_full, cap);
+        win_pop_oldest(&j->io_full, cap);
         win_pop_oldest(&j->sys_dt, cap);
     }
 }
@@ -91,17 +92,18 @@ static void memwin_push(struct tg_judge *j, struct tg_memwin *w, uint64_t kib, u
  * 칸 안의 시간 분포를 알 수 없으므로 과대 추정으로 잘못 종료하는 것보다 놓치는 쪽을 택한다.
  * 윈도가 span보다 길지 않으면(정상적인 주기) 칸을 통째로 쓴다.
  */
-static void sys_totals(const struct tg_judge *j, uint64_t *full_us, uint64_t *dt_us)
+static void win_totals(const struct tg_judge *j, const struct tg_win *fw, uint64_t *full_us,
+                       uint64_t *dt_us)
 {
     uint32_t cap = j->nsamples;
-    uint64_t sum_full = j->sys_full.sum;
+    uint64_t sum_full = fw->sum;
     uint64_t sum_dt = j->sys_dt.sum;
 
     *full_us = sum_full;
     *dt_us = sum_dt;
     if (sum_dt > j->span_us && j->sys_dt.filled > 1) {
         uint32_t idx = (j->sys_dt.head + cap - j->sys_dt.filled) % cap;
-        uint64_t ofull = j->sys_full.v[idx];
+        uint64_t ofull = fw->v[idx];
         uint64_t odt = j->sys_dt.v[idx];
         uint64_t rest_dt = sum_dt - odt;
         uint64_t inwin = j->span_us > rest_dt ? j->span_us - rest_dt : 0;
@@ -125,7 +127,9 @@ static void reset_windows(struct tg_judge *j)
     j->sys_has_prev = false;
     j->sys_prev_total_us = 0;
     j->sys_prev_now_ns = 0;
+    j->io_prev_total_us = 0;
     win_reset(&j->sys_full);
+    win_reset(&j->io_full);
     win_reset(&j->sys_dt);
     for (uint32_t i = 0; i < TG_MAX_TARGETS; i++)
         j->slot[i].used = false;
@@ -147,6 +151,8 @@ void tg_judge_init(struct tg_judge *j, const struct tg_config *cfg)
     j->span_us = (uint64_t)j->nsamples * cfg->sample_interval_ms * 1000ull;
     j->full_pct = cfg->full_pct;
     j->mem_avail_pct = cfg->mem_avail_pct;
+    j->io_pct = cfg->io_full_pct;
+    j->io_avail_pct = cfg->io_mem_avail_pct;
     j->min_size_pct = cfg->min_size_pct;
     j->min_growth_pct = cfg->min_growth_pct;
     j->grace_sec = cfg->startup_grace_sec;
@@ -291,7 +297,13 @@ struct tg_decision tg_judge_tick(struct tg_judge *j, const struct tg_sample *s,
     struct tg_decision d;
     uint32_t nc;
     uint32_t sys_avg;
+    uint32_t io_avg = 0;
     uint32_t x100;
+    uint32_t z100;
+    bool io_on;
+    bool mem_high;
+    bool io_high;
+    enum tg_judge_path path = TG_PATH_NONE;
     int32_t best = -1;
     uint32_t ready_count = 0;
 
@@ -304,6 +316,7 @@ struct tg_decision tg_judge_tick(struct tg_judge *j, const struct tg_sample *s,
     d.kind = TG_J_WATCHING;
 
     nc = s->ncand > TG_MAX_TARGETS ? TG_MAX_TARGETS : s->ncand;
+    io_on = j->io_pct > 0 && s->io_valid;
 
     /*
      * 시스템 윈도 갱신. 첫 샘플은 기준점만 잡는다. 직전 샘플과의 간격이 윈도 전체가 대표하는
@@ -322,11 +335,14 @@ struct tg_decision tg_judge_tick(struct tg_judge *j, const struct tg_sample *s,
         uint64_t dt_us = s->now_ns > j->sys_prev_now_ns ? (s->now_ns - j->sys_prev_now_ns) / 1000 : 0;
 
         win_push(&j->sys_full, j->nsamples, sat32(delta(s->sys_full_total_us, j->sys_prev_total_us)));
+        win_push(&j->io_full, j->nsamples, io_on ? sat32(delta(s->io_full_total_us, j->io_prev_total_us)) : 0);
         win_push(&j->sys_dt, j->nsamples, sat32(dt_us));
         sys_trim(j);
     }
     j->sys_has_prev = true;
     j->sys_prev_total_us = s->sys_full_total_us;
+    if (io_on)
+        j->io_prev_total_us = s->io_full_total_us;
     j->sys_prev_now_ns = s->now_ns;
 
     /* 이번 샘플에 없는 후보의 상태는 버린다. 다시 나타나면 처음부터 쌓는다. */
@@ -359,34 +375,47 @@ struct tg_decision tg_judge_tick(struct tg_judge *j, const struct tg_sample *s,
         uint64_t full_us;
         uint64_t dt_us;
 
-        sys_totals(j, &full_us, &dt_us);
+        win_totals(j, &j->sys_full, &full_us, &dt_us);
         sys_avg = avg_x100(full_us, dt_us);
+        if (io_on) {
+            win_totals(j, &j->io_full, &full_us, &dt_us);
+            io_avg = avg_x100(full_us, dt_us);
+        }
     }
     x100 = j->full_pct * 100;
+    z100 = j->io_pct * 100;
     d.sys_avg_x100 = sys_avg;
+    d.io_avg_x100 = io_avg;
+    mem_high = sys_avg >= x100;
+    io_high = io_on && io_avg >= z100;
 
-    if (sys_avg < x100 / CALM_DIVISOR) {
+    if (sys_avg < x100 / CALM_DIVISOR && (!io_on || io_avg < z100 / CALM_DIVISOR)) {
         reset_watch(j);
         d.kind = TG_J_IDLE;
         d.reason = TG_R_CALM;
         return d;
     }
-    if (sys_avg < x100) {
-        j->last_skip = TG_R_NONE; /* 다시 X를 넘으면 사유를 새로 알린다 */
+    if (!mem_high && !io_high) {
+        j->last_skip = TG_R_NONE; /* 다시 임계를 넘으면 사유를 새로 알린다 */
         return d;
     }
 
-    /* 압력이 높다. 여유 메모리가 아직 충분하면 종료하지 않는다. */
+    /* 압력이 높다. 그 경로의 여유 메모리 조건을 채우지 못하면(아직 충분하면) 종료하지 않는다. */
     {
         uint64_t total_kib = s->mem_total_bytes / 1024;
         uint64_t avail_kib = s->mem_available_bytes / 1024;
 
         if (total_kib > 0)
             d.avail_x100 = sat32(avail_kib * 10000 / total_kib);
-        if (total_kib == 0 || avail_kib * 100 > total_kib * j->mem_avail_pct) {
+        if (total_kib > 0 && mem_high && avail_kib * 100 <= total_kib * j->mem_avail_pct)
+            path = TG_PATH_MEM;
+        else if (total_kib > 0 && io_high && avail_kib * 100 <= total_kib * j->io_avail_pct)
+            path = TG_PATH_IO;
+        if (path == TG_PATH_NONE) {
             skip_once(j, &d, TG_R_MEM_AVAILABLE);
             return d;
         }
+        d.path = path;
     }
 
     /* 보호 상태가 낡았으면 종료하지 않는다. 그동안 보호 설정이 바뀌었을 수 있다. */
@@ -438,6 +467,19 @@ const struct tg_cand_stat *tg_judge_stats(const struct tg_judge *j, uint32_t *n)
 {
     *n = j->nstat;
     return j->stat;
+}
+
+const char *tg_judge_path_name(enum tg_judge_path p)
+{
+    switch (p) {
+    case TG_PATH_MEM:
+        return "mem";
+    case TG_PATH_IO:
+        return "io";
+    case TG_PATH_NONE:
+        break;
+    }
+    return "none";
 }
 
 const char *tg_judge_reason_name(enum tg_judge_reason r)

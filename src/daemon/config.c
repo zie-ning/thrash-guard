@@ -28,6 +28,8 @@ void tg_config_defaults(struct tg_config *cfg)
     cfg->sustain_sec = 10;
     cfg->sample_interval_ms = 250;
     cfg->mem_avail_pct = 10;
+    cfg->io_full_pct = 50;      /* 임시 초기값. 정상 버스트 실험으로 조정한다 */
+    cfg->io_mem_avail_pct = 5;  /* 임시 초기값 */
     cfg->min_size_pct = 10;
     cfg->min_growth_pct = 1;
     cfg->startup_grace_sec = 30;
@@ -70,6 +72,8 @@ static const struct field fields[] = {
     F_U32(sustain_sec, 1, 300),
     F_U32(sample_interval_ms, 50, 1000),
     F_U32(mem_avail_pct, 1, 100),
+    F_U32(io_full_pct, 0, 100),
+    F_U32(io_mem_avail_pct, 1, 100),
     F_U32(min_size_pct, 1, 100),
     F_U32(min_growth_pct, 1, 100),
     F_U32(startup_grace_sec, 0, 3600),

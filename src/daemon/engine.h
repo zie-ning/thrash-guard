@@ -57,11 +57,13 @@ struct tg_engine {
 };
 
 /*
- * cfg는 엔진보다 오래 살아야 한다. psi_path와 meminfo_path는 보통 /proc/... 이고 테스트에서 바꾼다.
+ * cfg는 엔진보다 오래 살아야 한다. psi_path, io_path, meminfo_path는 보통 /proc/... 이고 테스트에서 바꾼다.
+ * io_path를 열지 못하거나 cfg->io_full_pct가 0이면 io 경로 없이 시작한다(reader.io_fd < 0, 판단의 io 경로 꺼짐).
  * 실패하면 음수 errno이고 아무것도 열려 있지 않다.
  */
 int tg_engine_init(struct tg_engine *e, const struct tg_config *cfg, struct tg_log *log,
-                   struct tg_scanner *scanner, const char *psi_path, const char *meminfo_path);
+                   struct tg_scanner *scanner, const char *psi_path, const char *io_path,
+                   const char *meminfo_path);
 void tg_engine_close(struct tg_engine *e);
 
 /* 커널 트리거가 발화했다. 이미 관찰 중이면 무시한다. 첫 틱은 바로 처리하도록 예정한다. */

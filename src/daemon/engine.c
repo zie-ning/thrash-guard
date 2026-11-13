@@ -15,7 +15,8 @@
 #define LATE_FACTOR 2 /* 예정보다 틱 간격의 이 배수 이상 늦으면 경고한다 (임시 기준) */
 
 int tg_engine_init(struct tg_engine *e, const struct tg_config *cfg, struct tg_log *log,
-                   struct tg_scanner *scanner, const char *psi_path, const char *meminfo_path)
+                   struct tg_scanner *scanner, const char *psi_path, const char *io_path,
+                   const char *meminfo_path)
 {
     int rc;
 
@@ -25,12 +26,13 @@ int tg_engine_init(struct tg_engine *e, const struct tg_config *cfg, struct tg_l
     e->scanner = scanner;
     e->parent_fd = -1;
     e->reader.psi_fd = -1;
+    e->reader.io_fd = -1;
     e->reader.meminfo_fd = -1;
 
     e->parent_fd = open(cfg->target_parent, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     if (e->parent_fd < 0)
         return -errno;
-    rc = tg_reader_open(&e->reader, psi_path, meminfo_path);
+    rc = tg_reader_open(&e->reader, psi_path, cfg->io_full_pct > 0 ? io_path : NULL, meminfo_path);
     if (rc != 0) {
         close(e->parent_fd);
         e->parent_fd = -1;
@@ -38,6 +40,8 @@ int tg_engine_init(struct tg_engine *e, const struct tg_config *cfg, struct tg_l
     }
 
     tg_judge_init(&e->judge, cfg);
+    if (e->reader.io_fd < 0)
+        e->judge.io_pct = 0; /* io 압력 파일이 없으면 io 경로를 끈다 */
     tg_policy_init(&e->policy, cfg->cooldown_sec, cfg->max_kills_per_hour);
     e->interval_ns = (uint64_t)cfg->sample_interval_ms * 1000000ull;
     return 0;
@@ -77,6 +81,7 @@ static void log_skip(struct tg_engine *e, const struct tg_decision *d)
     tg_buf_str(&b, "judge skip");
     tg_buf_kv_str(&b, "reason", tg_judge_reason_name(d->reason));
     tg_buf_kv_u64(&b, "sys_avg_x100", d->sys_avg_x100);
+    tg_buf_kv_u64(&b, "io_avg_x100", d->io_avg_x100);
     tg_buf_kv_u64(&b, "avail_x100", d->avail_x100);
     tg_log_end(e->log, &b);
 }
@@ -89,6 +94,7 @@ static void log_calm(struct tg_engine *e, const struct tg_decision *d)
         return;
     tg_buf_str(&b, "judge calm");
     tg_buf_kv_u64(&b, "sys_avg_x100", d->sys_avg_x100);
+    tg_buf_kv_u64(&b, "io_avg_x100", d->io_avg_x100);
     tg_log_end(e->log, &b);
 }
 
@@ -103,7 +109,9 @@ static void log_kill(struct tg_engine *e, const struct tg_decision *d, const cha
     tg_buf_kv_str(&b, "cand", name);
     tg_buf_kv_u64(&b, "dry_run", dry ? 1 : 0);
     tg_buf_kv_i64(&b, "result", rc);
+    tg_buf_kv_str(&b, "path", tg_judge_path_name(d->path));
     tg_buf_kv_u64(&b, "sys_avg_x100", d->sys_avg_x100);
+    tg_buf_kv_u64(&b, "io_avg_x100", d->io_avg_x100);
     tg_buf_kv_u64(&b, "avail_x100", d->avail_x100);
     tg_buf_kv_u64(&b, "max_bytes", d->cand_max_bytes);
     tg_buf_kv_u64(&b, "growth_bytes", d->cand_growth_bytes);
