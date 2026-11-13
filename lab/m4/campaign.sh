@@ -1,0 +1,63 @@
+#!/bin/bash
+# M4 본 실행 목록을 순서대로 돌린다 (설계: docs/validation/overview.md 4절).
+#
+# 부하 3종(runaway_growth, spike_mem, burst_mem)을 dry-run과 켜짐(kill)으로 reps회씩, 정상 버스트(normal_burst)를
+# dry-run으로 reps회 돌린다. 시간 흐름에 따른 치우침(VM 호스트 상태 등)이 한 조건에 몰리지 않도록 회차마다
+# 모든 조건을 한 번씩 돌린다. 이미 result.json이 있는 실행은 건너뛰어 중단했다 다시 시작할 수 있다.
+#
+# 사용법: lab/m4/campaign.sh [--out-root DIR] [--reps N] [--list] [-- run.sh에 넘길 옵션...]
+#   --out-root DIR   결과를 모을 디렉터리 (기본 results/m4/<날짜>)
+#   --reps N         회차 수 (기본 3)
+#   --list           돌릴 목록만 보여 준다
+#   --               이후의 옵션은 모든 run.sh 호출에 그대로 넘긴다 (예: -- --burst-mib 450)
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+OUT_ROOT="$ROOT/results/m4/$(date +%Y%m%d)"
+REPS=3
+LIST=0
+EXTRA=()
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --out-root) OUT_ROOT="$2"; shift 2 ;;
+        --reps) REPS="$2"; shift 2 ;;
+        --list) LIST=1; shift ;;
+        --) shift; EXTRA=("$@"); break ;;
+        *) echo "알 수 없는 옵션: $1" >&2; exit 2 ;;
+    esac
+done
+[[ "$REPS" =~ ^[0-9]+$ ]] && [ "$REPS" -gt 0 ] || { echo "--reps는 1 이상의 정수여야 한다" >&2; exit 2; }
+
+plan=()
+for rep in $(seq 1 "$REPS"); do
+    for load in runaway_growth spike_mem burst_mem; do
+        plan+=("$load dry $rep" "$load kill $rep")
+    done
+    plan+=("normal_burst dry $rep")
+done
+
+echo "실행 ${#plan[@]}회 -> $OUT_ROOT" >&2
+failed=()
+for item in "${plan[@]}"; do
+    read -r load mode rep <<<"$item"
+    id="$load-$mode-$rep"
+    if [ -f "$OUT_ROOT/$id/result.json" ]; then
+        echo "건너뜀(이미 있음): $id" >&2
+        continue
+    fi
+    if [ "$LIST" = 1 ]; then
+        echo "$id"
+        continue
+    fi
+    echo "==== $id" >&2
+    if ! "$ROOT/lab/m4/run.sh" --load "$load" --daemon "$mode" --id "$id" --out "$OUT_ROOT/$id" "${EXTRA[@]}"; then
+        echo "실패: $id (다음 실행으로 넘어간다)" >&2
+        failed+=("$id")
+    fi
+done
+
+if [ "${#failed[@]}" -gt 0 ]; then
+    echo "실패한 실행: ${failed[*]}" >&2
+    exit 1
+fi
