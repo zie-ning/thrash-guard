@@ -1,0 +1,59 @@
+[12:31:08] VM 시작 (IOPS=100)
+[12:34:11] t=10 524856kB avg10=2.66 hog:Up 2 seconds prot:Up 15 seconds 0 
+[12:34:22] t=20 488080kB avg10=0.98 hog:Up 12 seconds prot:Up 25 seconds 0 
+[12:34:32] t=30 430896kB avg10=0.36 hog:Up 21 seconds prot:Up 35 seconds 0 
+[12:34:41] t=40 369416kB avg10=0.16 hog:Up 31 seconds prot:Up 45 seconds 0 
+[12:34:51] t=50 312216kB avg10=0.05 hog:Up 41 seconds prot:Up 55 seconds 0 
+[12:35:03] t=60 242932kB avg10=0.01 hog:Up 53 seconds prot:Up About a minute 0 
+[12:35:19] t=70 175276kB avg10=0.00 hog:Up About a minute prot:Up About a minute 0 
+[12:35:29] t=80 145176kB avg10=0.00 hog:Up About a minute prot:Up About a minute 0 
+[12:35:39] t=90 123632kB avg10=0.00 hog:Up About a minute prot:Up About a minute 0 
+[12:35:56] t=100 100736kB avg10=0.00 hog:Up About a minute prot:Up About a minute 0 
+[12:36:07] t=110 66956kB avg10=0.00 hog:Up About a minute prot:Up 2 minutes 0 
+[12:36:20] t=120 54236kB avg10=0.00 hog:Up 2 minutes prot:Up 2 minutes 0 
+[12:36:40] t=130  
+[12:37:02] t=140  
+[12:37:15] t=150 Connection timed out during banner exchange 
+[12:37:30] t=160 Connection timed out during banner exchange 
+[12:37:44] t=170 Connection timed out during banner exchange 
+[12:37:59] t=180 Connection timed out during banner exchange 
+[12:38:12] t=190 Connection timed out during banner exchange 
+[12:38:27] t=200 Connection timed out during banner exchange 
+[12:38:42] t=210 Connection timed out during banner exchange 
+[12:39:02] t=220  
+[12:39:13] t=230 140540kB avg10=0.81 hog:Up 5 minutes prot:Up 5 minutes 0 
+[12:39:21] t=240 141800kB avg10=0.30 hog:Exited (137) 36 seconds ago prot:Up 5 minutes 0 
+[12:39:22] hog 종료 감지
+[12:39:42] ==== 데몬 로그
+Started thrash-guard: terminate a culprit cgroup under memory thrashing.
+thrash-guard 유효 설정:
+2026-11-13T03:33:47.176Z warn no cgroup under target_parent matches target_match, nothing will be terminated
+2026-11-13T03:33:47.179Z info start mode=kill
+2026-11-13T03:33:47.597Z info trigger watch start
+2026-11-13T03:33:57.597Z info judge calm sys_avg_x100=548
+2026-11-13T03:37:03.405Z info trigger watch start
+2026-11-13T03:37:16.656Z info judge calm sys_avg_x100=1835
+2026-11-13T03:37:17.029Z info trigger watch start
+2026-11-13T03:37:27.029Z info judge calm sys_avg_x100=117
+2026-11-13T03:37:49.269Z info trigger watch start
+2026-11-13T03:37:59.269Z info judge calm sys_avg_x100=501
+2026-11-13T03:37:59.981Z info trigger watch start
+2026-11-13T03:38:09.981Z info judge calm sys_avg_x100=708
+2026-11-13T03:38:12.461Z info trigger watch start
+2026-11-13T03:38:22.462Z info judge calm sys_avg_x100=402
+2026-11-13T03:38:30.349Z info trigger watch start
+2026-11-13T03:38:40.349Z info judge calm sys_avg_x100=710
+2026-11-13T03:38:44.316Z info trigger watch start
+2026-11-13T03:38:54.318Z info judge calm sys_avg_x100=102
+2026-11-13T03:39:01.404Z info trigger watch start
+2026-11-13T03:39:11.406Z info judge calm sys_avg_x100=60
+[  413.544209] containerd-shim invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=-998
+[  413.544573] oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=containerd.service,mems_allowed=0,global_oom,task_memcg=/system.slice/docker-3344ac1c936c64de2385bd19fbe75fc5b9abfd1e354f876596e3ac96f3011fc6.scope,task=tg-load,pid=1590,uid=0
+[  413.544591] Out of memory: Killed process 1590 (tg-load) total-vm:258068kB, anon-rss:256000kB, file-rss:0kB, shmem-rss:0kB, UID:0 pgtables:536kB oom_score_adj:0
+
+pressure
+some avg10=0.04 avg60=3.28 avg300=4.63 total=25949718
+full avg10=0.04 avg60=1.90 avg300=1.91 total=11225769
+hog Exited (137) 55 seconds ago
+prot Up 5 minutes
+2026-11-13T03:39:40.791Z info stats triggers=9 ticks=382 skips=0 calms=9 kills=0 dry_kills=0 kill_errors=0 sample_errors=0 late_ticks=0 max_delay_ms=4

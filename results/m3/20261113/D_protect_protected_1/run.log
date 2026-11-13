@@ -1,0 +1,47 @@
+[13:50:05] 실험 A: prot=protected, VM 시작 (IOPS=100)
+active
+# 확인한 뒤 ExecStart의 --dry-run을 --no-dry-run으로 바꿔 실제 종료를 켠다.
+ExecStart=/usr/local/sbin/thrash-guard --config /etc/thrash-guard/thrash-guard.conf --no-dry-run
+both-started
+prot oom_score_adj=-1000
+hog oom_score_adj=0
+[13:53:01] t=10 512148kB avg10=0.04 hog:Up 10 seconds prot:Up 15 seconds 0 
+[13:53:12] t=20 453108kB avg10=0.01 hog:Up 19 seconds prot:Up 25 seconds 0 
+[13:53:22] t=30 392596kB avg10=0.00 hog:Up 29 seconds prot:Up 35 seconds 0 
+[13:53:30] t=40 333616kB avg10=0.00 hog:Up 39 seconds prot:Up 45 seconds 0 
+[13:53:41] t=50 274920kB avg10=0.00 hog:Up 49 seconds prot:Up 54 seconds 0 
+[13:53:53] t=60 211208kB avg10=0.00 hog:Up About a minute prot:Up About a minute 0 
+[13:54:06] t=70 167864kB avg10=0.00 hog:Up About a minute prot:Up About a minute 0 
+[13:54:18] t=80 145632kB avg10=0.00 hog:Up About a minute prot:Up About a minute 0 
+[13:54:30] t=90 118296kB avg10=0.00 hog:Up About a minute prot:Up About a minute 0 
+[13:54:40] t=100 98120kB avg10=0.00 hog:Up About a minute prot:Up About a minute 0 
+[13:54:52] t=110 75728kB avg10=0.00 hog:Up About a minute prot:Up 2 minutes 0 
+[13:55:08] t=120 63020kB avg10=0.00 hog:Up 2 minutes prot:Up 2 minutes 0 
+[13:55:28] t=130  
+[13:55:43] t=140 Connection timed out during banner exchange 
+[13:55:56] t=150 Connection timed out during banner exchange 
+[13:56:11] t=160 Connection timed out during banner exchange 
+[13:56:31] t=170  
+[13:56:48] t=180 130668kB avg10=0.89 hog:Exited (137) 40 seconds ago prot:Up 4 minutes 0 
+[13:56:48] 컨테이너 종료 감지
+[13:57:06] ==== 데몬 로그
+Started thrash-guard: terminate a culprit cgroup under memory thrashing.
+thrash-guard 유효 설정:
+2026-11-13T04:52:35.041Z warn no cgroup under target_parent matches target_match, nothing will be terminated
+2026-11-13T04:52:35.042Z info start mode=kill
+2026-11-13T04:55:53.020Z info trigger watch start
+2026-11-13T04:56:03.020Z info judge skip reason=mem_available sys_avg_x100=1965 avail_x100=2222
+2026-11-13T04:56:11.771Z info judge calm sys_avg_x100=312
+2026-11-13T04:56:30.196Z info trigger watch start
+2026-11-13T04:56:40.197Z info judge calm sys_avg_x100=110
+[  313.417244] tg-load invoked oom-killer: gfp_mask=0x140dca(GFP_HIGHUSER_MOVABLE|__GFP_COMP|__GFP_ZERO), order=0, oom_score_adj=-1000
+[  313.417496] oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=docker-3a5f504f77a4e03d163bdc90c774325bbe486dd9673da7b55005c04677cccfd2.scope,mems_allowed=0,global_oom,task_memcg=/system.slice/docker-1cd46077c2138c4eaf35a25b6897cb14ebfa4dd93fd8c201b678ba7c27154a79.scope,task=tg-load,pid=1305,uid=0
+[  313.417510] Out of memory: Killed process 1305 (tg-load) total-vm:258068kB, anon-rss:256000kB, file-rss:128kB, shmem-rss:0kB, UID:0 pgtables:536kB oom_score_adj:0
+
+pressure
+some avg10=0.08 avg60=5.39 avg300=3.42 total=14261981
+full avg10=0.06 avg60=1.32 avg300=0.65 total=2783985
+hog Exited (137) About a minute ago
+prot Up 4 minutes
+2026-11-13T04:57:07.080Z info stats triggers=2 ticks=117 skips=1 calms=2 kills=0 dry_kills=0 kill_errors=0 sample_errors=0 late_ticks=0 max_delay_ms=2
+[13:57:08] psi 기록 273줄

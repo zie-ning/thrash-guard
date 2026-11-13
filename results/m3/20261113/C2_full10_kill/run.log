@@ -1,0 +1,44 @@
+[13:16:46] VM 시작 (IOPS=100)
+active
+# 확인한 뒤 ExecStart의 --dry-run을 --no-dry-run으로 바꿔 실제 종료를 켠다.
+ExecStart=/usr/local/sbin/thrash-guard --config /etc/thrash-guard/thrash-guard.conf --no-dry-run
+[13:19:39] t=10 544476kB avg10=0.08 hog:Up 11 seconds 0 
+[13:19:48] t=20 504024kB avg10=0.02 hog:Up 21 seconds 0 
+[13:19:58] t=30 462576kB avg10=0.00 hog:Up 30 seconds 0 
+[13:20:08] t=40 423948kB avg10=0.00 hog:Up 40 seconds 0 
+[13:20:17] t=50 386828kB avg10=0.00 hog:Up 50 seconds 0 
+[13:20:34] t=60 292532kB avg10=0.00 hog:Up About a minute 0 
+[13:20:43] t=70 279932kB avg10=0.00 hog:Up About a minute 0 
+[13:20:54] t=80 236364kB avg10=0.00 hog:Up About a minute 0 
+[13:21:10] t=90 190464kB avg10=0.00 hog:Up About a minute 0 
+[13:21:23] t=100 124132kB avg10=4.27 hog:Up About a minute 0 
+[13:21:35] t=110 76644kB avg10=1.93 hog:Up 2 minutes 0 
+[13:21:55] t=120  
+[13:22:15] t=130  
+[13:22:26] t=140 599020kB avg10=5.01 hog:Exited (137) 21 seconds ago 1 
+[13:22:26] hog 종료 감지
+[13:22:45] ==== 데몬 로그
+Started thrash-guard: terminate a culprit cgroup under memory thrashing.
+thrash-guard 유효 설정:
+2026-11-13T04:19:17.357Z warn no cgroup under target_parent matches target_match, nothing will be terminated
+2026-11-13T04:19:17.357Z info start mode=kill
+2026-11-13T04:21:07.428Z info trigger watch start
+2026-11-13T04:21:18.179Z info judge calm sys_avg_x100=423
+2026-11-13T04:21:20.547Z info trigger watch start
+2026-11-13T04:21:30.548Z info judge calm sys_avg_x100=170
+2026-11-13T04:21:50.811Z info trigger watch start
+2026-11-13T04:22:00.812Z warn judge kill cand=docker-cb1be85d200ba2049714a63b50a108c1af3defbc00c6b48cd7a32d868490731d.scope dry_run=0 result=0 sys_avg_x100=1606 avail_x100=82 max_bytes=643756032 growth_bytes=40878080 growing=1
+2026-11-13T04:22:00.812Z info judge cand name=docker-cb1be85d200ba2049714a63b50a108c1af3defbc00c6b48cd7a32d868490731d.scope max_bytes=643756032 growth_bytes=40878080 ready=1 eligible=1 growing=1 grace=0 protected=0
+2026-11-13T04:22:01.316Z info trigger watch start
+2026-11-13T04:22:11.316Z info judge skip reason=mem_available sys_avg_x100=1727 avail_x100=6169
+2026-11-13T04:22:16.067Z info judge calm sys_avg_x100=446
+2026-11-13T04:22:18.036Z info trigger watch start
+2026-11-13T04:22:28.037Z info judge calm sys_avg_x100=59
+2026-11-13T04:22:46.643Z info trigger watch start
+
+pressure
+some avg10=6.27 avg60=4.71 avg300=1.75 total=6739555
+full avg10=6.25 avg60=4.58 avg300=1.70 total=6482594
+hog Exited (137) 45 seconds ago
+2026-11-13T04:22:49.578Z info stats triggers=6 ticks=239 skips=1 calms=4 kills=1 dry_kills=0 kill_errors=0 sample_errors=0 late_ticks=0 max_delay_ms=1
+[13:22:50] psi 기록 213줄

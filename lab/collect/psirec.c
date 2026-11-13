@@ -2,7 +2,8 @@
  * psirec - PSI(memory, io, cpu)와 MemAvailable을 1초마다 기록한다
  *
  * 스래싱 중에도 기록이 끊기지 않도록 mlockall로 고정하고, 출력은 tmpfs(/dev/shm) 파일에 write(2)로 이어 쓴다.
- * 파일 하나당 한 줄: 에포크 밀리초, memory some/full, io some/full, cpu some/full (누적 us), MemAvailable(kB).
+ * 한 줄: 에포크 밀리초, memory some/full, io some/full, cpu some/full (누적 us), MemAvailable(kB),
+ * vda 읽기 완료 횟수, vda 읽은 섹터 수(512바이트). 마지막 두 값은 처리량 상한이 실제로 걸리는지 보려는 것이다.
  * stdio와 힙 할당을 쓰지 않는다.
  *
  * 사용법: psirec <출력 경로> [초]    (초를 생략하면 신호가 올 때까지)
@@ -62,6 +63,47 @@ static uint64_t meminfo_avail(const char *buf, size_t n)
     return 0;
 }
 
+/* /proc/diskstats에서 장치 이름이 dev인 줄의 읽기 완료 횟수(4번째)와 읽은 섹터(6번째)를 읽는다. 없으면 0. */
+static void disk_reads(const char *buf, size_t n, const char *dev, uint64_t *reads, uint64_t *sectors)
+{
+    size_t dl = strlen(dev);
+
+    *reads = 0;
+    *sectors = 0;
+    for (size_t i = 0; i < n;) {
+        size_t e = i;
+        while (e < n && buf[e] != '\n')
+            e++;
+        /* 필드: major minor name reads_completed reads_merged sectors_read ... */
+        size_t pos = i;
+        int field = 0;
+        uint64_t vals[3] = {0, 0, 0};
+        int match = 0;
+        while (pos < e && field < 6) {
+            while (pos < e && buf[pos] == ' ')
+                pos++;
+            size_t st = pos;
+            while (pos < e && buf[pos] != ' ')
+                pos++;
+            if (field == 2)
+                match = (pos - st == dl && memcmp(buf + st, dev, dl) == 0);
+            else if (field == 3 || field == 5) {
+                uint64_t v = 0;
+                for (size_t k = st; k < pos && buf[k] >= '0' && buf[k] <= '9'; k++)
+                    v = v * 10 + (uint64_t)(buf[k] - '0');
+                vals[field == 3 ? 0 : 1] = v;
+            }
+            field++;
+        }
+        if (match && field >= 6) {
+            *reads = vals[0];
+            *sectors = vals[1];
+            return;
+        }
+        i = e + 1;
+    }
+}
+
 static size_t put_u64(char *out, uint64_t v)
 {
     char t[24];
@@ -82,11 +124,13 @@ int main(int argc, char **argv)
     static const char *const files[3] = {"/proc/pressure/memory", "/proc/pressure/io", "/proc/pressure/cpu"};
     int fd[3];
     int mi;
+    int ds;
     int out;
     unsigned long secs = 0;
     struct timespec next;
     char buf[1024];
-    char line[256];
+    static char dbuf[16384];
+    char line[320];
 
     if (argc < 2)
         return 2;
@@ -98,8 +142,9 @@ int main(int argc, char **argv)
             return 3;
     }
     mi = open("/proc/meminfo", O_RDONLY | O_CLOEXEC);
+    ds = open("/proc/diskstats", O_RDONLY | O_CLOEXEC);
     out = open(argv[1], O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
-    if (mi < 0 || out < 0)
+    if (mi < 0 || out < 0 || ds < 0)
         return 3;
     signal(SIGTERM, on_sig);
     signal(SIGINT, on_sig);
@@ -123,6 +168,18 @@ int main(int argc, char **argv)
         n = pread(mi, buf, sizeof(buf), 0);
         line[len++] = ' ';
         len += put_u64(line + len, n > 0 ? meminfo_avail(buf, (size_t)n) : 0);
+        {
+            uint64_t rd = 0;
+            uint64_t sec = 0;
+
+            n = pread(ds, dbuf, sizeof(dbuf), 0);
+            if (n > 0)
+                disk_reads(dbuf, (size_t)n, "vda", &rd, &sec);
+            line[len++] = ' ';
+            len += put_u64(line + len, rd);
+            line[len++] = ' ';
+            len += put_u64(line + len, sec);
+        }
         line[len++] = '\n';
         if (write(out, line, len) < 0)
             return 4;
