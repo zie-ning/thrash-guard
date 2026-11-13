@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <string.h>
 
+#include "match.h"
 #include "procfs.h"
 
 #define CFG_FILE_CAP 4096 /* 설정 파일 최대 크기(NUL 포함). 넘으면 -ENOBUFS */
@@ -18,13 +19,17 @@
 void tg_config_defaults(struct tg_config *cfg)
 {
     memset(cfg, 0, sizeof(*cfg));
-    strcpy(cfg->target_parent, "/sys/fs/cgroup/workload.slice");
+    strcpy(cfg->target_parent, "/sys/fs/cgroup/system.slice");
+    /* 컨테이너 런타임의 cgroup 이름(도커, podman, containerd, cri-o의 systemd 드라이버). 임시, VM에서 확인 필요 */
+    strcpy(cfg->target_match, "docker-*.scope,libpod-*.scope,cri-containerd-*.scope,crio-*.scope");
     cfg->trigger_stall_us = 150000;
     cfg->trigger_window_us = 1000000;
-    cfg->full_pct = 40;
+    cfg->full_pct = 10; /* 임시 초기값. 정상 버스트 실험으로 조정한다 */
     cfg->sustain_sec = 10;
     cfg->sample_interval_ms = 250;
     cfg->mem_avail_pct = 10;
+    cfg->io_full_pct = 50;      /* 임시 초기값. 정상 버스트 실험으로 조정한다 */
+    cfg->io_mem_avail_pct = 5;  /* 임시 초기값 */
     cfg->min_size_pct = 10;
     cfg->min_growth_pct = 1;
     cfg->startup_grace_sec = 30;
@@ -60,12 +65,15 @@ struct field {
  */
 static const struct field fields[] = {
     F_STR(target_parent, TG_CFG_PATH_CAP - 1),
+    F_STR(target_match, TG_CFG_MATCH_CAP - 1),
     F_U32(trigger_stall_us, 1, 10000000),
     F_U32(trigger_window_us, 500000, 10000000),
     F_U32(full_pct, 1, 100),
     F_U32(sustain_sec, 1, 300),
     F_U32(sample_interval_ms, 50, 1000),
     F_U32(mem_avail_pct, 1, 100),
+    F_U32(io_full_pct, 0, 100),
+    F_U32(io_mem_avail_pct, 1, 100),
     F_U32(min_size_pct, 1, 100),
     F_U32(min_growth_pct, 1, 100),
     F_U32(startup_grace_sec, 0, 3600),
@@ -329,6 +337,10 @@ int tg_config_validate(const struct tg_config *cfg, struct tg_cfg_err *err)
     if (!path_is_clean_absolute(cfg->target_parent)) {
         set_key(err, "target_parent", strlen("target_parent"));
         return fail(err, -EINVAL, "절대 경로여야 하고 빈 요소, '.', '..'를 포함할 수 없다");
+    }
+    if (!tg_match_valid(cfg->target_match)) {
+        set_key(err, "target_match", strlen("target_match"));
+        return fail(err, -EINVAL, "쉼표로 구분한 이름 패턴이어야 한다(빈 패턴, '/', 127자 초과는 안 된다)");
     }
     if (cfg->log_path[0] != '\0' && !path_is_clean_absolute(cfg->log_path)) {
         set_key(err, "log_path", strlen("log_path"));

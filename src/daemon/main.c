@@ -16,6 +16,7 @@
 
 #include "config.h"
 #include "engine.h"
+#include "envcheck.h"
 #include "loop.h"
 #include "scanner.h"
 #include "selfprot.h"
@@ -47,16 +48,19 @@ static void print_config(const struct tg_config *c, bool foreground)
             "thrash-guard 유효 설정:\n"
             "  모드: %s%s\n"
             "  target_parent=%s\n"
+            "  target_match=%s\n"
             "  trigger: full %u/%u us\n"
             "  판단: 최근 %u초 평균 full >= %u%% (샘플 %u ms, %u칸)\n"
+            "  io 경로: 평균 io full >= %u%% 이고 가용 메모리 <= %u%% (0이면 끔)\n"
             "  안전장치: grace %u초, cooldown %u초, 시간당 최대 %u회\n"
             "  로그: %s (링버퍼 %u KiB)\n"
             "  자기 보호: mlock=%s, oom_score_adj=%d\n",
             c->dry_run ? "dry-run (종료하지 않음)" : "실제 종료",
-            foreground ? ", foreground" : "", c->target_parent,
+            foreground ? ", foreground" : "", c->target_parent, c->target_match,
             (unsigned)c->trigger_stall_us, (unsigned)c->trigger_window_us,
             (unsigned)c->sustain_sec, (unsigned)c->full_pct, (unsigned)c->sample_interval_ms,
-            (unsigned)tg_config_window_samples(c), (unsigned)c->startup_grace_sec,
+            (unsigned)tg_config_window_samples(c), (unsigned)c->io_full_pct, (unsigned)c->io_mem_avail_pct,
+            (unsigned)c->startup_grace_sec,
             (unsigned)c->cooldown_sec, (unsigned)c->max_kills_per_hour,
             c->log_path[0] != '\0' ? c->log_path : "표준 오류", (unsigned)c->log_ring_kb,
             c->mlock ? "yes" : "no", (int)c->oom_score_adj);
@@ -93,6 +97,10 @@ static int run_daemon(const struct tg_config *cfg)
     struct tg_selfprot_opts sp;
     struct tg_selfprot_result spr;
     struct tg_loop_fds fds;
+    struct tg_env_report env;
+    char sample_child[TG_TARGET_NAME_CAP];
+    bool have_child = false;
+    bool env_fail = false;
     int sig_fd;
     int trigger_fd;
     int rc;
@@ -120,19 +128,50 @@ static int run_daemon(const struct tg_config *cfg)
     if (spr.oom_adj_err > 0)
         log_msg(TG_LOG_WARN, "self protection: oom_score_adj failed");
 
-    rc = tg_scanner_start(&g_scanner, cfg->target_parent, SCAN_INTERVAL_MS);
+    rc = tg_scanner_start(&g_scanner, cfg->target_parent, cfg->target_match, SCAN_INTERVAL_MS);
     if (rc != 0) {
         fprintf(stderr, "thrash-guard: 후보 탐색을 시작할 수 없다: %s: %s\n", cfg->target_parent,
                 strerror(-rc));
         goto fail_log;
     }
 
+    /* 후보가 하나도 없으면 데몬은 아무것도 종료하지 못한다. 켜져 있어도 동작하지 않는 상태를 알린다. */
+    {
+        const struct tg_targets *t = tg_scanner_acquire(&g_scanner);
+        bool none = t->n == 0;
+
+        if (!none)
+            memcpy(sample_child, t->t[0].name, sizeof(sample_child));
+        tg_scanner_release(&g_scanner);
+        if (none)
+            log_msg(TG_LOG_WARN, "no cgroup under target_parent matches target_match, nothing will be terminated");
+        have_child = !none;
+    }
+
+    /* 실행 환경 점검: 종료 때에야 드러날 문제를 시작 때 알린다. 실제 종료 모드에서는 시작을 거부한다. */
+    tg_env_check(cfg->target_parent, have_child ? sample_child : NULL, &env);
+    for (int i = 0; i < env.n; i++) {
+        if (cfg->dry_run) {
+            log_msg(TG_LOG_WARN, env.issue[i]);
+        } else {
+            fprintf(stderr, "thrash-guard: 환경 점검 실패: %s\n", env.issue[i]);
+            env_fail = true;
+        }
+    }
+    if (env_fail) {
+        fputs("  --dry-run으로는 시작할 수 있지만 실제 종료는 동작하지 않는다.\n", stderr);
+        goto fail_scanner;
+    }
+
     rc = tg_engine_init(&g_engine, cfg, &g_log, &g_scanner, "/proc/pressure/memory",
-                        "/proc/meminfo");
+                        "/proc/pressure/io", "/proc/meminfo");
     if (rc != 0) {
         fprintf(stderr, "thrash-guard: 엔진 초기화 실패: %s\n", strerror(-rc));
         goto fail_scanner;
     }
+
+    if (cfg->io_full_pct > 0 && g_engine.reader.io_fd < 0)
+        log_msg(TG_LOG_WARN, "/proc/pressure/io unavailable, io path disabled");
 
     trigger_fd = tg_psi_trigger_open(cfg->trigger_stall_us, cfg->trigger_window_us);
     if (trigger_fd < 0) {
@@ -230,18 +269,6 @@ int main(int argc, char **argv)
     rc = tg_config_validate(&cfg, &err);
     if (rc != 0) {
         report_cfg_error(config_path, rc, &err);
-        return EXIT_CONFIG;
-    }
-
-    /*
-     * 보호 대상(oom_score_adj=-1000인 프로세스가 든 cgroup)을 후보에서 빼는 판정이 아직 없다.
-     * 그동안 실제 종료를 허용하면 sshd 같은 필수 프로세스가 든 cgroup을 죽일 수 있으므로 막는다.
-     * 보호 판정을 구현하면 이 검사를 지운다.
-     */
-    if (!cfg.dry_run) {
-        fprintf(stderr,
-                "thrash-guard: 필수 프로세스 보호 판정이 아직 구현되지 않아 실제 종료 모드"
-                "(--no-dry-run)를 쓸 수 없다. dry-run으로만 실행한다.\n");
         return EXIT_CONFIG;
     }
 

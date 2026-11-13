@@ -1,0 +1,18 @@
+1794559125.722116185 0.3 0 | avail=475MiB full=avg10=0.00 containers=1 
+1794559136.026985686 0.3 0 | avail=436MiB full=avg10=0.00 containers=1 
+1794559144.619565428 0.5 0 | avail=394MiB full=avg10=0.00 containers=1 
+1794559155.157987517 0.2 0 | avail=410MiB full=avg10=3.30 containers=1 
+1794559165.412304700 0.2 0 | avail=398MiB full=avg10=1.48 containers=1 
+1794559173.850732640 0.3 0 | avail=377MiB full=avg10=0.54 containers=1 
+1794559184.193792900 0.8 0 | avail=318MiB full=avg10=0.20 containers=1 
+1794559195.022193323 0.2 0 | avail=298MiB full=avg10=0.07 containers=1 
+1794559203.515804461 0.3 0 | avail=259MiB full=avg10=0.02 containers=1 
+1794559213.819662858 0.3 0 | avail=218MiB full=avg10=0.00 containers=1 
+1794559224.145119303 0.7 0 | avail=179MiB full=avg10=0.00 containers=1 
+1794559232.897963414 0.2 0 | avail=141MiB full=avg10=0.00 containers=1 
+1794559243.167531180 0.2 0 | avail=105MiB full=avg10=0.14 containers=1 
+1794559253.439162249 1.2 0 | avail=53MiB full=avg10=0.21 containers=1 
+1794559262.905477348 0.3 0 | avail=54MiB full=avg10=0.07 containers=1 
+1794559273.206365302 0.7 0 | avail=26MiB full=avg10=0.02 containers=1 
+1794559283.914712731 5.0 255 | Connection timed out during banner exchange 
+1794559297.183083242 6.8 0 | avail=589MiB full=avg10=3.13 containers=0 

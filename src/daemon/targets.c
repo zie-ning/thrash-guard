@@ -5,6 +5,8 @@
  */
 #include "targets.h"
 
+#include "match.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
@@ -61,6 +63,7 @@ void tg_targets_release(struct tg_targets *t, const struct tg_targets *keep)
     }
     t->n = 0;
     t->skipped = 0;
+    t->scanned_ns = 0;
 }
 
 /* dfd 아래 "name/file"을 연다. */
@@ -105,6 +108,8 @@ static void add_entry(struct tg_targets *next, const struct tg_targets *cur, int
         return;
     if (name[0] == '.' && (nlen == 1 || (nlen == 2 && name[1] == '.')))
         return;
+    if (!tg_match_name(next->match, name))
+        return; /* 종료 후보로 삼을 이름이 아니다 */
 
     old = tg_targets_find(cur, name);
     if (old != NULL && !same_cgroup(dfd, name, nlen, old)) {
@@ -144,6 +149,7 @@ static void add_entry(struct tg_targets *next, const struct tg_targets *cur, int
     e->pressure_fd = pfd;
     e->current_fd = sfd;
     e->first_seen_ns = initial ? 0 : now_ns;
+    e->protect = 0;
 }
 
 /* 디렉터리를 한 번 훑는다. */

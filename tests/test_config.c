@@ -23,7 +23,7 @@ static void test_defaults(void)
     /* 초기값 */
     TG_CHECK_EQ_U64(c.trigger_stall_us, 150000);
     TG_CHECK_EQ_U64(c.trigger_window_us, 1000000);
-    TG_CHECK_EQ_U64(c.full_pct, 40);
+    TG_CHECK_EQ_U64(c.full_pct, 10);
     TG_CHECK_EQ_U64(c.mem_avail_pct, 10);
     TG_CHECK_EQ_U64(c.min_size_pct, 10);
     TG_CHECK_EQ_U64(c.min_growth_pct, 1);
@@ -35,7 +35,10 @@ static void test_defaults(void)
     TG_CHECK(c.dry_run);
     TG_CHECK(c.mlock);
     TG_CHECK(c.oom_score_adj == -1000);
-    TG_CHECK(strcmp(c.target_parent, "/sys/fs/cgroup/workload.slice") == 0);
+    TG_CHECK(strcmp(c.target_parent, "/sys/fs/cgroup/system.slice") == 0);
+    /* 기본 후보는 컨테이너 런타임의 cgroup 이름뿐이다 */
+    TG_CHECK(strstr(c.target_match, "docker-*.scope") != NULL);
+    TG_CHECK(strchr(c.target_match, ' ') == NULL);
     TG_CHECK_EQ_U64(tg_config_window_samples(&c), 40);
     TG_CHECK(tg_config_validate(&c, &e) == 0);
 }
@@ -85,7 +88,7 @@ static void test_parse_format_quirks(void)
 
     /* 빈 입력 */
     TG_CHECK(parse("", &c, &e) == 0);
-    TG_CHECK_EQ_U64(c.full_pct, 40);
+    TG_CHECK_EQ_U64(c.full_pct, 10);
 
     /* 빈 문자열 값 허용(log_path) */
     TG_CHECK(parse("log_path=\n", &c, &e) == 0);
@@ -162,6 +165,48 @@ static void test_bad_syntax(void)
     /* 오류 줄 번호: 주석·빈 줄도 센다 */
     TG_CHECK(parse("# a\n\nfull_pct=5\nbogus=1\n", &c, &e) == -EINVAL);
     TG_CHECK(e.line == 4);
+}
+
+static void test_io_keys(void)
+{
+    struct tg_config c;
+    struct tg_cfg_err e;
+
+    tg_config_defaults(&c);
+    TG_CHECK_EQ_U64(c.io_full_pct, 50);
+    TG_CHECK_EQ_U64(c.io_mem_avail_pct, 5);
+
+    TG_CHECK(parse("io_full_pct=0\nio_mem_avail_pct=7\n", &c, &e) == 0);
+    TG_CHECK_EQ_U64(c.io_full_pct, 0); /* 0이면 io 경로를 끈다 */
+    TG_CHECK_EQ_U64(c.io_mem_avail_pct, 7);
+    TG_CHECK(parse("io_full_pct=100\n", &c, &e) == 0);
+    TG_CHECK(parse("io_full_pct=101\n", &c, &e) == -EINVAL);
+    TG_CHECK(parse("io_mem_avail_pct=0\n", &c, &e) == -EINVAL);
+    TG_CHECK(parse("io_mem_avail_pct=101\n", &c, &e) == -EINVAL);
+}
+
+static void test_target_match(void)
+{
+    struct tg_config c;
+    struct tg_cfg_err e;
+
+    /* 사용자가 서비스 이름을 직접 적는다 */
+    TG_CHECK(parse("target_match = myapp.service, worker@*.service\n", &c, &e) == 0);
+    TG_CHECK(strcmp(c.target_match, "myapp.service, worker@*.service") == 0);
+    TG_CHECK(parse("target_match=*\n", &c, &e) == 0);
+
+    /* 잘못된 패턴은 파싱은 되지만 검증에서 시작을 거부한다 */
+    TG_CHECK(parse("target_match=\n", &c, &e) == 0);
+    TG_CHECK(tg_config_validate(&c, &e) == -EINVAL);
+    TG_CHECK(strcmp(e.key, "target_match") == 0);
+    TG_CHECK(parse("target_match=a,,b\n", &c, &e) == 0);
+    TG_CHECK(tg_config_validate(&c, &e) == -EINVAL);
+    TG_CHECK(parse("target_match=a/b\n", &c, &e) == 0);
+    TG_CHECK(tg_config_validate(&c, &e) == -EINVAL);
+    TG_CHECK(parse("target_match=a,\n", &c, &e) == 0);
+    TG_CHECK(tg_config_validate(&c, &e) == -EINVAL);
+    TG_CHECK(parse("target_match=myapp.service\n", &c, &e) == 0);
+    TG_CHECK(tg_config_validate(&c, &e) == 0);
 }
 
 static void test_dry_run_policy(void)
@@ -290,6 +335,8 @@ int main(void)
     TG_RUN(test_unknown_key);
     TG_RUN(test_bad_values);
     TG_RUN(test_bad_syntax);
+    TG_RUN(test_io_keys);
+    TG_RUN(test_target_match);
     TG_RUN(test_dry_run_policy);
     TG_RUN(test_validate);
     TG_RUN(test_validate_zero);

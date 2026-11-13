@@ -1,7 +1,7 @@
 /*
  * sample.h - 판단 함수에 넘길 샘플 수집
  *
- * 시작할 때 /proc/pressure/memory와 /proc/meminfo를 한 번 열어 두고, 250 ms마다 pread로
+ * 시작할 때 /proc/pressure/memory, (선택) /proc/pressure/io, /proc/meminfo를 한 번 열어 두고, 250 ms마다 pread로
  * 다시 읽는다. open()은 스래싱 중 느려질 수 있기 때문이다. 후보별 memory.current는
  * 후보 표(targets)가 열어 둔 fd를 그대로 쓴다.
  *
@@ -17,14 +17,22 @@
 
 #define TG_READER_BUF 8192
 
+/* 후보 표를 마지막으로 계산한 지 이보다 오래되면 종료하지 않는다 (임시) */
+#define TG_TARGETS_STALE_NS (10ull * 1000000000ull)
+
 struct tg_reader {
     int psi_fd;
+    int io_fd; /* 없으면 -1. io 경로를 끄거나 열지 못했을 때 */
     int meminfo_fd;
     char buf[TG_READER_BUF];
 };
 
-/* 두 파일을 연다. 실패하면 음수 errno이고 아무것도 열려 있지 않다. */
-int tg_reader_open(struct tg_reader *r, const char *psi_path, const char *meminfo_path);
+/*
+ * 파일을 연다. psi_path와 meminfo_path를 열지 못하면 음수 errno이고 아무것도 열려 있지 않다.
+ * io_path가 NULL이거나 열지 못하면 io_fd를 -1로 두고 성공으로 돌려준다(io 경로만 빠진다). 호출자가 io_fd로 확인한다.
+ */
+int tg_reader_open(struct tg_reader *r, const char *psi_path, const char *io_path,
+                   const char *meminfo_path);
 void tg_reader_close(struct tg_reader *r);
 
 struct tg_sample_buf {

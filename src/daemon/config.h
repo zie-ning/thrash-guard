@@ -26,11 +26,19 @@
 #include <stdint.h>
 
 #define TG_CFG_PATH_CAP 256        /* 경로 문자열 용량(NUL 포함) */
+#define TG_CFG_MATCH_CAP 512      /* target_match 문자열 용량(NUL 포함) */
 #define TG_MAX_WINDOW_SAMPLES 256 /* 지속 판단 고정 배열의 최대 칸 수. 후보 32개 x 2배열이 mlock되므로 작게 둔다 */
 
 struct tg_config {
     /* 감시·종료 대상 구역. 이 cgroup의 memory.pressure를 감시하고 그 하위만 종료한다 */
     char target_parent[TG_CFG_PATH_CAP];
+
+    /*
+     * 종료 후보로 삼을 하위 cgroup의 이름 패턴(쉼표로 구분, '*'만 특별). target_parent의 직계 자식 중
+     * 이름이 맞는 것만 후보가 된다. 기본값은 컨테이너 런타임의 cgroup 이름이다. 일반 서비스를 후보로
+     * 쓰려면 사용자가 서비스 이름을 직접 적는다. 모든 것을 후보로 쓰려면 "*"를 적는다.
+     */
+    char target_match[TG_CFG_MATCH_CAP];
 
     /* 커널 PSI 트리거: window_us 동안 stall_us 이상 멈추면 깨운다 */
     uint32_t trigger_stall_us;
@@ -41,6 +49,10 @@ struct tg_config {
     uint32_t sustain_sec;        /* N */
     uint32_t sample_interval_ms; /* 샘플 주기. sustain_sec 안에 정수 번 들어가야 한다 */
     uint32_t mem_avail_pct;      /* Y: MemAvailable이 전체의 이 비율 이하일 때만 종료한다 */
+    /* io 경로: 최근 윈도 평균 io full이 io_full_pct 이상이고 MemAvailable이 io_mem_avail_pct 이하이면 종료한다.
+     * 굳어진 livelock에서는 memory full이 낮아지고 io full이 높아지기 때문이다. io_full_pct=0이면 io 경로를 끈다. */
+    uint32_t io_full_pct;
+    uint32_t io_mem_avail_pct;
     uint32_t min_size_pct;       /* 후보 자격: 윈도 안 최대 사용량이 전체의 이 비율 이상 */
     uint32_t min_growth_pct;     /* 증가 인정: 윈도 안 증가량이 전체의 이 비율 이상 */
 

@@ -1,0 +1,45 @@
+[14:10:51] 실험 A: prot=plain, VM 시작 (IOPS=100)
+active
+# 확인한 뒤 ExecStart의 --dry-run을 --no-dry-run으로 바꿔 실제 종료를 켠다.
+ExecStart=/usr/local/sbin/thrash-guard --config /etc/thrash-guard/thrash-guard.conf --no-dry-run
+both-started
+prot oom_score_adj=0
+hog oom_score_adj=0
+[14:13:50] t=10 510320kB avg10=0.04 hog:Up 10 seconds prot:Up 16 seconds 0 
+[14:14:00] t=20 450548kB avg10=0.01 hog:Up 19 seconds prot:Up 26 seconds 0 
+[14:14:11] t=30 390160kB avg10=0.00 hog:Up 29 seconds prot:Up 36 seconds 0 
+[14:14:19] t=40 330268kB avg10=0.00 hog:Up 39 seconds prot:Up 46 seconds 0 
+[14:14:30] t=50 271068kB avg10=0.00 hog:Up 49 seconds prot:Up 55 seconds 0 
+[14:14:43] t=60 207284kB avg10=0.00 hog:Up About a minute prot:Up About a minute 0 
+[14:14:53] t=70 166328kB avg10=0.00 hog:Up About a minute prot:Up About a minute 0 
+[14:15:05] t=80 144192kB avg10=0.00 hog:Up About a minute prot:Up About a minute 0 
+[14:15:15] t=90 121316kB avg10=0.00 hog:Up About a minute prot:Up About a minute 0 
+[14:15:27] t=100 94900kB avg10=0.00 hog:Up About a minute prot:Up About a minute 0 
+[14:15:38] t=110 74492kB avg10=0.00 hog:Up About a minute prot:Up 2 minutes 0 
+[14:15:51] t=120 55764kB avg10=0.00 hog:Up 2 minutes prot:Up 2 minutes 0 
+[14:16:08] t=130 50140kB avg10=0.00 hog:Up 2 minutes prot:Up 2 minutes 0 
+[14:16:28] t=140  
+[14:16:43] t=150 Connection timed out during banner exchange 
+[14:17:03] t=160  
+[14:17:17] t=170 322768kB avg10=1.27 hog:Up 3 minutes prot:Up 3 minutes 1 
+[14:17:25] t=180 328228kB avg10=0.38 hog:Up 3 minutes prot:Exited (137) 31 seconds ago 1 
+[14:17:25] 컨테이너 종료 감지
+[14:17:45] ==== 데몬 로그
+Started thrash-guard: terminate a culprit cgroup under memory thrashing.
+thrash-guard 유효 설정:
+2026-11-13T05:13:23.750Z warn no cgroup under target_parent matches target_match, nothing will be terminated
+2026-11-13T05:13:23.750Z info start mode=kill
+2026-11-13T05:16:39.958Z info trigger watch start
+2026-11-13T05:16:49.959Z warn judge kill cand=docker-a34d6f00323690bf46c08a5b1d51eaa6804910b3f685c4997090b6ea591d28c7.scope dry_run=0 result=0 sys_avg_x100=1446 avail_x100=0 max_bytes=403890176 growth_bytes=16719872 growing=1
+2026-11-13T05:16:49.959Z info judge cand name=docker-257deeef1446e3f8a44ede273b9a94ea0b6255e223df2192553af10f0d8847db.scope max_bytes=263442432 growth_bytes=118784 ready=1 eligible=1 growing=0 grace=0 protected=0
+2026-11-13T05:16:49.959Z info judge cand name=docker-a34d6f00323690bf46c08a5b1d51eaa6804910b3f685c4997090b6ea591d28c7.scope max_bytes=403890176 growth_bytes=16719872 ready=1 eligible=1 growing=1 grace=0 protected=0
+2026-11-13T05:16:50.470Z info trigger watch start
+2026-11-13T05:17:00.472Z info judge calm sys_avg_x100=0
+
+pressure
+some avg10=0.11 avg60=5.27 avg300=2.93 total=11780737
+full avg10=0.05 avg60=1.03 avg300=0.48 total=2191574
+hog Up 4 minutes
+prot Exited (137) 50 seconds ago
+2026-11-13T05:17:44.496Z info stats triggers=2 ticks=82 skips=0 calms=1 kills=1 dry_kills=0 kill_errors=0 sample_errors=0 late_ticks=0 max_delay_ms=1
+[14:17:46] psi 기록 261줄

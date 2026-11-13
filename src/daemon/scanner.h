@@ -32,14 +32,16 @@ struct tg_scanner {
     pthread_t thread;
     bool started;
     char parent[TG_CFG_PATH_CAP];
+    char match[TG_CFG_MATCH_CAP]; /* 후보 이름 패턴 복사본. 두 표의 match가 이것을 가리킨다 */
     uint32_t interval_ms;
+    int proc_fd; /* /proc 디렉터리. 보호 상태 계산에 쓴다 */
 };
 
 /*
  * 첫 스캔을 동기로 끝낸 뒤 스레드를 시작한다. 이때 발견한 항목은 first_seen_ns=0(유예 면제).
  * 첫 스캔이 실패하면 스레드를 만들지 않고 음수 errno를 돌려준다.
  */
-int tg_scanner_start(struct tg_scanner *s, const char *parent, uint32_t interval_ms);
+int tg_scanner_start(struct tg_scanner *s, const char *parent, const char *match, uint32_t interval_ms);
 
 /* 공개된 표를 잡는다. 반드시 tg_scanner_release로 놓아야 한다. */
 const struct tg_targets *tg_scanner_acquire(struct tg_scanner *s);

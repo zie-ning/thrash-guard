@@ -25,12 +25,15 @@ struct tg_target {
     int pressure_fd;               /* memory.pressure */
     int current_fd;                /* memory.current */
     uint64_t first_seen_ns;        /* 처음 발견한 단조 시각. 데몬 시작 때 있던 항목은 0 */
+    uint8_t protect;               /* tg_protect_state. 0 = 보호 대상 아님, 그 밖은 후보에서 뺀다 */
 };
 
 struct tg_targets {
     struct tg_target t[TG_MAX_TARGETS];
     uint32_t n;
     uint32_t skipped; /* 표가 가득 차서 빠진 후보 수 */
+    const char *match; /* 후보로 삼을 이름 패턴(tg_match_name). NULL이면 모두. tg_targets_init이 NULL로 둔다 */
+    uint64_t scanned_ns; /* 보호 상태까지 계산해 마친 단조 시각. 0이면 아직 계산하지 않았다 */
 };
 
 void tg_targets_init(struct tg_targets *t);
