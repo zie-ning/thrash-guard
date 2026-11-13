@@ -60,12 +60,17 @@ TEST_CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined \
                -fno-sanitize-recover=all -DTG_FIXTURE_DIR='"tests/fixtures"'
 TESTS := $(TBUILD)/test_procfs $(TBUILD)/test_fmt $(TBUILD)/test_cgscan \
          $(TBUILD)/test_config $(TBUILD)/test_policy $(TBUILD)/test_targets \
-         $(TBUILD)/test_judge $(TBUILD)/test_killer $(TBUILD)/test_engine $(TBUILD)/test_protect $(TBUILD)/test_match $(TBUILD)/test_envcheck $(TBUILD)/test_log
+         $(TBUILD)/test_judge $(TBUILD)/test_killer $(TBUILD)/test_engine $(TBUILD)/test_protect $(TBUILD)/test_match $(TBUILD)/test_envcheck $(TBUILD)/test_noalloc $(TBUILD)/test_log
 
 $(TBUILD)/test_%: tests/test_%.c $(COMMON_SRC) $(DAEMON_LIB_SRC) tests/tg_test.h \
                   $(wildcard src/common/*.h src/daemon/*.h)
 	@mkdir -p $(@D)
 	$(TEST_CC) $(CSTD) $(WARN) $(TEST_CFLAGS) $(INC) -Itests -o $@ $< $(COMMON_SRC) $(DAEMON_LIB_SRC)
+
+# 무할당 시험은 malloc을 직접 가로채므로 sanitizer 없이 따로 빌드한다.
+$(TBUILD)/test_noalloc: tests/test_noalloc.c $(COMMON_SRC) $(DAEMON_LIB_SRC) tests/tg_test.h                         $(wildcard src/common/*.h src/daemon/*.h)
+	@mkdir -p $(@D)
+	$(TEST_CC) $(CSTD) $(WARN) -O1 -g $(INC) -Itests -o $@ $< $(COMMON_SRC) $(DAEMON_LIB_SRC)
 
 test: $(TESTS)
 	@set -e; for t in $(TESTS); do echo "== $$t"; ./$$t; done
