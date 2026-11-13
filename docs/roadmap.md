@@ -46,7 +46,7 @@ M0 (완료) ─┬─ M1 (검증 도구, 최소 재현) ────────
 | M3-5a | 로그 링버퍼와 기록 스레드 | 완료 |
 | M3-5b | 종료 경로: `cgroup_kill` (`oom_kill`은 후속) | 완료 |
 | M3-6 | 초기화 이후 무할당 검증 | 완료 (`test_noalloc`. 루프 `poll` 경로는 대상 밖) |
-| M3-11 | 굳어진 livelock 대응: 판단 함수에 io 경로 추가 (`io_full_pct`, `io_mem_avail_pct`) | 완료 (단위 테스트, 기록 재생 확인. VM 재확인 진행. 임시값) |
+| M3-11 | 굳어진 livelock 대응: 판단 함수에 io 경로 추가 (`io_full_pct`, `io_mem_avail_pct`) | 완료 (단위 테스트, 기록 재생, VM 실제 종료 2/2가 io 경로로 종료. 임시값) |
 | M3-10 | 시작 시 환경 점검(cgroup v2, memory 컨트롤러, `cgroup.kill`) | 완료 (실제 종료 모드는 실패 시 시작 거부) |
 | M3-8 | systemd 서비스 파일 | 완료 (`packaging/`. 값은 임시이고 VM에서 서비스로 기동해 확인 필요) |
 | M3-9 | 필수 프로세스 보호 drop-in, 보호된 cgroup을 후보에서 제외 | 완료 (종료 제외는 VM에서 확인. `MemoryLow`는 이 시나리오에서 효과가 없어 선택 설정으로 둠) |
