@@ -23,7 +23,7 @@ static void test_defaults(void)
     /* 초기값 */
     TG_CHECK_EQ_U64(c.trigger_stall_us, 150000);
     TG_CHECK_EQ_U64(c.trigger_window_us, 1000000);
-    TG_CHECK_EQ_U64(c.full_pct, 40);
+    TG_CHECK_EQ_U64(c.full_pct, 10);
     TG_CHECK_EQ_U64(c.mem_avail_pct, 10);
     TG_CHECK_EQ_U64(c.min_size_pct, 10);
     TG_CHECK_EQ_U64(c.min_growth_pct, 1);
@@ -88,7 +88,7 @@ static void test_parse_format_quirks(void)
 
     /* 빈 입력 */
     TG_CHECK(parse("", &c, &e) == 0);
-    TG_CHECK_EQ_U64(c.full_pct, 40);
+    TG_CHECK_EQ_U64(c.full_pct, 10);
 
     /* 빈 문자열 값 허용(log_path) */
     TG_CHECK(parse("log_path=\n", &c, &e) == 0);
