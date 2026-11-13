@@ -167,6 +167,24 @@ static void test_bad_syntax(void)
     TG_CHECK(e.line == 4);
 }
 
+static void test_io_keys(void)
+{
+    struct tg_config c;
+    struct tg_cfg_err e;
+
+    tg_config_defaults(&c);
+    TG_CHECK_EQ_U64(c.io_full_pct, 50);
+    TG_CHECK_EQ_U64(c.io_mem_avail_pct, 5);
+
+    TG_CHECK(parse("io_full_pct=0\nio_mem_avail_pct=7\n", &c, &e) == 0);
+    TG_CHECK_EQ_U64(c.io_full_pct, 0); /* 0이면 io 경로를 끈다 */
+    TG_CHECK_EQ_U64(c.io_mem_avail_pct, 7);
+    TG_CHECK(parse("io_full_pct=100\n", &c, &e) == 0);
+    TG_CHECK(parse("io_full_pct=101\n", &c, &e) == -EINVAL);
+    TG_CHECK(parse("io_mem_avail_pct=0\n", &c, &e) == -EINVAL);
+    TG_CHECK(parse("io_mem_avail_pct=101\n", &c, &e) == -EINVAL);
+}
+
 static void test_target_match(void)
 {
     struct tg_config c;
@@ -317,6 +335,7 @@ int main(void)
     TG_RUN(test_unknown_key);
     TG_RUN(test_bad_values);
     TG_RUN(test_bad_syntax);
+    TG_RUN(test_io_keys);
     TG_RUN(test_target_match);
     TG_RUN(test_dry_run_policy);
     TG_RUN(test_validate);

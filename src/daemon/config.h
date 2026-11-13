@@ -49,6 +49,10 @@ struct tg_config {
     uint32_t sustain_sec;        /* N */
     uint32_t sample_interval_ms; /* 샘플 주기. sustain_sec 안에 정수 번 들어가야 한다 */
     uint32_t mem_avail_pct;      /* Y: MemAvailable이 전체의 이 비율 이하일 때만 종료한다 */
+    /* io 경로: 최근 윈도 평균 io full이 io_full_pct 이상이고 MemAvailable이 io_mem_avail_pct 이하이면 종료한다.
+     * 굳어진 livelock에서는 memory full이 낮아지고 io full이 높아지기 때문이다. io_full_pct=0이면 io 경로를 끈다. */
+    uint32_t io_full_pct;
+    uint32_t io_mem_avail_pct;
     uint32_t min_size_pct;       /* 후보 자격: 윈도 안 최대 사용량이 전체의 이 비율 이상 */
     uint32_t min_growth_pct;     /* 증가 인정: 윈도 안 증가량이 전체의 이 비율 이상 */
 

@@ -28,6 +28,11 @@
 
 static char root[64];
 static char psi_path[128];
+static char io_path[128];
+static bool use_io; /* env_up_with가 io 압력 파일을 엔진에 넘긴다 */
+static uint64_t io_us;
+static uint32_t io_cfg_pct = 50; /* 설정의 io_full_pct */
+static bool io_file_exists = true; /* false면 env_up_with가 io 압력 파일을 만들지 않는다 */
 static char mem_path[128];
 static char parent[128];
 static int sig_fd = -1;
@@ -70,6 +75,17 @@ static void set_full(uint64_t total_us)
              "full avg10=0.00 avg60=0.00 avg300=0.00 total=%llu\n",
              (unsigned long long)total_us);
     write_file(psi_path, s);
+}
+
+static void set_io(uint64_t total_us)
+{
+    char s[256];
+
+    snprintf(s, sizeof(s),
+             "some avg10=0.00 avg60=0.00 avg300=0.00 total=0\n"
+             "full avg10=0.00 avg60=0.00 avg300=0.00 total=%llu\n",
+             (unsigned long long)total_us);
+    write_file(io_path, s);
 }
 
 static void set_avail_kib(uint64_t kib)
@@ -153,6 +169,9 @@ static void env_up_with(bool dry_run)
     mk_cg("B", MIB(50));
     full_us = 0;
     set_full(full_us);
+    io_us = 0;
+    if (io_file_exists)
+        set_io(io_us);
     set_avail_kib(50 * 1024);
 
     tg_config_defaults(&cfg);
@@ -160,6 +179,7 @@ static void env_up_with(bool dry_run)
     cfg.sustain_sec = 1;
     cfg.sample_interval_ms = 250;
     cfg.dry_run = dry_run;
+    cfg.io_full_pct = io_cfg_pct;
 
     loglen = 0;
     logbuf[0] = '\0';
@@ -168,7 +188,7 @@ static void env_up_with(bool dry_run)
     o.sink = test_sink;
     TG_CHECK(tg_log_open(&lg, &o) == 0);
     TG_CHECK(tg_scanner_start(&sc, parent, NULL, 60000) == 0);
-    TG_CHECK(tg_engine_init(&eng, &cfg, &lg, &sc, psi_path, mem_path) == 0);
+    TG_CHECK(tg_engine_init(&eng, &cfg, &lg, &sc, psi_path, use_io ? io_path : NULL, mem_path) == 0);
     now_ns = tg_now_ns(); /* 후보 표의 갱신 시각(실제 단조 시계)과 같은 시계를 쓴다 */
     env_up = true;
 }
@@ -197,6 +217,93 @@ static void ticks(int n, uint64_t pressure_us)
 
 /* ---------- 샘플 수집 ---------- */
 
+/* memory full과 io full을 함께 올리며 틱을 n번 돌린다. 인자는 한 틱에 늘어나는 누적(us). */
+static void io_ticks(int n, uint64_t mem_add_us, uint64_t io_add_us)
+{
+    for (int i = 0; i < n; i++) {
+        full_us += mem_add_us;
+        io_us += io_add_us;
+        set_full(full_us);
+        set_io(io_us);
+        tg_engine_tick(&eng, now_ns);
+        now_ns += TICK_NS;
+    }
+}
+
+/* 굳어진 livelock: memory full 1%, io full 80%, 가용 메모리 4.9%. io 경로가 종료를 결정한다. */
+static void test_io_path_decides(void)
+{
+    use_io = true;
+    env_up_with(true);
+    tg_engine_trigger(&eng, now_ns);
+    io_ticks(6, 2500, 200000);
+    TG_CHECK_EQ_U64(eng.st.dry_kills, 1);
+    env_down();
+    use_io = false;
+    TG_CHECK(strstr(logbuf, "judge kill cand=A dry_run=1") != NULL);
+    TG_CHECK(strstr(logbuf, "path=io") != NULL);
+    TG_CHECK(strstr(logbuf, "io_avg_x100=") != NULL);
+}
+
+/* io 경로를 엔진에 넘기지 않으면(설정 0이거나 파일이 없음) io만 높은 상황은 진정으로 끝난다 */
+static void test_io_path_absent(void)
+{
+    use_io = false;
+    env_up_with(true);
+    tg_engine_trigger(&eng, now_ns);
+    io_ticks(8, 2500, 200000);
+    TG_CHECK_EQ_U64(eng.st.dry_kills, 0);
+    TG_CHECK(!tg_engine_watching(&eng));
+    env_down();
+    TG_CHECK(strstr(logbuf, "judge calm") != NULL);
+
+    /* 설정 io_full_pct=0이면 io 압력 파일을 열지 않는다 */
+    use_io = true;
+    io_cfg_pct = 0;
+    env_up_with(true);
+    TG_CHECK(eng.reader.io_fd < 0);
+    tg_engine_trigger(&eng, now_ns);
+    io_ticks(8, 2500, 200000);
+    TG_CHECK_EQ_U64(eng.st.dry_kills, 0);
+    env_down();
+    io_cfg_pct = 50;
+    use_io = false;
+}
+
+static void test_io_file_missing_disables_io_path(void)
+{
+    char saved[128];
+
+    snprintf(saved, sizeof(saved), "%s", io_path);
+    snprintf(io_path, sizeof(io_path), "%s/does_not_exist", root);
+    use_io = true;
+    io_file_exists = false;
+    env_up_with(true);
+    TG_CHECK(eng.reader.io_fd < 0);
+    TG_CHECK_EQ_U64(eng.judge.io_pct, 0);
+    tg_engine_trigger(&eng, now_ns);
+    io_ticks(8, 2500, 200000);
+    TG_CHECK_EQ_U64(eng.st.dry_kills, 0); /* io 경로 없이 memory 1%라 진정 */
+    env_down();
+    use_io = false;
+    io_file_exists = true;
+    snprintf(io_path, sizeof(io_path), "%s", saved);
+}
+
+/* 정상적인 대용량 I/O: io full은 높지만 가용 메모리가 충분하면 종료하지 않는다 */
+static void test_io_high_with_plenty_of_memory(void)
+{
+    use_io = true;
+    env_up_with(true);
+    set_avail_kib(500 * 1024);
+    tg_engine_trigger(&eng, now_ns);
+    io_ticks(8, 2500, 200000);
+    TG_CHECK_EQ_U64(eng.st.dry_kills, 0);
+    env_down();
+    use_io = false;
+    TG_CHECK(strstr(logbuf, "judge skip reason=mem_available") != NULL);
+}
+
 static void test_sample_collect(void)
 {
     struct tg_reader r;
@@ -204,7 +311,7 @@ static void test_sample_collect(void)
     const struct tg_targets *t;
 
     env_up_with(true);
-    TG_CHECK(tg_reader_open(&r, psi_path, mem_path) == 0);
+    TG_CHECK(tg_reader_open(&r, psi_path, NULL, mem_path) == 0);
     t = tg_scanner_acquire(&sc);
     TG_CHECK(tg_sample_collect(&r, t, 5, &sb) == 0);
     TG_CHECK_EQ_U64(sb.s.ncand, 2);
@@ -556,10 +663,15 @@ int main(void)
         return 1;
     }
     snprintf(psi_path, sizeof(psi_path), "%s/psi", root);
+    snprintf(io_path, sizeof(io_path), "%s/io", root);
     snprintf(mem_path, sizeof(mem_path), "%s/meminfo", root);
     snprintf(parent, sizeof(parent), "%s/cg", root);
 
     TG_RUN(test_sample_collect);
+    TG_RUN(test_io_path_decides);
+    TG_RUN(test_io_path_absent);
+    TG_RUN(test_io_file_missing_disables_io_path);
+    TG_RUN(test_io_high_with_plenty_of_memory);
     TG_RUN(test_trigger_schedule);
     TG_RUN(test_calm);
     TG_RUN(test_dry_run_kill);
