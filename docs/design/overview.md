@@ -83,7 +83,7 @@ MVP는 `cgroup_kill` 한 가지다. 선택한 cgroup의 `cgroup.kill`에 `1`을 
 
 **종료와 CPU**: 두 방식 모두 "파일에 쓴다"는 것은 시스템 콜이다. 데몬 스레드가 CPU를 받아 `write()`를 실행하면 커널이 그 호출 안에서 대상에 SIGKILL을 표시하고 깨운다(별도 커널 프로세스가 파일을 감시하는 구조가 아니다).
 실제로 사라지는 것은 대상이 CPU를 받아 종료 처리를 마친 뒤이고, 디스크 입출력을 기다리는 상태의 대상은 그 대기가 끝나야 한다. 그래서 CPU가 포화되면 `write()` 시작과 대상의 종료가 모두 늦어질 수 있다.
-이 프로젝트가 겨냥한 스래싱은 CPU보다 메모리·입출력 병목이고, 그쪽은 `mlockall`로 대비한다. CPU 경쟁은 보호하지 못하는 **한계**이며, 서비스 파일(M3-8)에 `CPUWeight` 상향을 넣고 M4에서 CPU 부하를 섞어 확인한다.
+이 프로젝트가 겨냥한 스래싱은 CPU보다 메모리·입출력 병목이고, 그쪽은 `mlockall`로 대비한다. CPU 경쟁은 보호하지 못하는 **한계**이며, 서비스 파일(`packaging/thrash-guard.service`)에 `CPUWeight` 상향을 넣었고 M4에서 CPU 부하를 섞어 확인한다.
 
 ## 5. 이벤트 루프와 시작 순서
 
@@ -156,7 +156,7 @@ MVP는 `cgroup_kill` 한 가지다. 선택한 cgroup의 `cgroup.kill`에 `1`을 
 | `src/daemon/match` | 후보 이름 패턴(`target_match`) | 완료 |
 | `src/daemon/protect` | 보호된 cgroup 판정(하위 재귀, 확인 불가는 보호로 취급) | 완료 |
 | `src/daemon/envcheck` | 시작 시 환경 점검(cgroup v2, memory 컨트롤러, `cgroup.kill`) | 완료 |
-| `src/daemon/main` | CLI, 설정 로드, 시작 순서와 정리 | 완료 (서비스 파일은 미구현) |
+| `src/daemon/main` | CLI, 설정 로드, 시작 순서와 정리 | 완료 |
 
 ## 9. 초기값과 목표 수치 (모두 측정 전 임시값)
 

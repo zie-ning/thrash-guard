@@ -4,6 +4,8 @@
 
 | 파일 | 내용 |
 |---|---|
+| `thrash-guard.service` | 데몬 서비스 파일(dry-run 시작, 재시작, 자기 보호, `CPUWeight`) |
+| `thrash-guard.conf` | 설정 예시(모두 기본값, 주석 처리) |
 | `dropins/sshd.service.d/protect.conf` | sshd 보호(`OOMScoreAdjust=-1000`, `MemoryLow=` 예시) |
 
 보호 대상은 서비스 설정에 `OOMScoreAdjust=-1000`을 적으면 된다. 그 서비스가 든 cgroup(하위 포함)은 종료 후보에서 빠진다.
