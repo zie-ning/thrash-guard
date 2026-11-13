@@ -8,7 +8,7 @@
 # E는 oom_score_adj=-1000이라 보호된다. 디스크는 처리량 약 10.9 MB/s로 제한한다(VM_BPS로 바꿀 수 있다).
 #
 # 사용법: lab/m4/run.sh --load NAME --daemon MODE [옵션]
-#   --load NAME        runaway_growth | spike_mem | burst_mem | normal_burst
+#   --load NAME        runaway_growth | spike_mem | normal_burst
 #   --daemon MODE      none(데몬 없음) | dry(판단만 기록, 꺼짐 대용) | kill(실제 종료)
 #   --id NAME          실행 이름 (기본 <load>-<daemon>)
 #   --out DIR          결과 디렉터리 (기본 results/m4/<날짜>/<id>)
@@ -20,11 +20,14 @@
 #   --pin-mib N        mlock으로 고정할 메모리 (기본 43, 길벗의 회수 불가 메모리 모사. 0이면 쓰지 않는다)
 #   --anon-mib N       runaway_growth·spike_mem의 목표 크기 (기본 650)
 #   --rate-mib N       runaway_growth의 초당 증가량 (기본 4)
-#   --burst-mib N      burst_mem·normal_burst의 덩어리 크기 (기본: burst_mem 500, normal_burst 300)
-#   --burst-hold N     덩어리를 유지하는 시간 (기본: burst_mem 20, normal_burst 5)
+#   --burst-mib N      normal_burst의 덩어리 크기 (기본 400)
+#   --burst-hold N     덩어리를 유지하는 시간 (기본 5)
 #   --burst-rest N     해제 후 쉬는 시간 (기본 10)
 #
-# 부하 크기·버스트 값은 예비 실행으로 맞추기 전의 임시값이다. 실행 조건은 모두 run.json에 남는다.
+# 기본값은 예비 실행으로 맞춘 값이다(docs/validation/overview.md 4절). 실행 조건은 모두 run.json에 남는다.
+# burst_mem(폭주형 반복 할당·해제)은 폭주로 맞추지 못해 뺐다.
+# normal_burst는 T0나 해소와 무관하게 관찰 시간(--observe-sec) 전체를 본다. 데몬이 후보를 고르기까지
+# 유예(기본 30초)가 있어, 첫 사이클에서 끝내면 오탐 여부를 알 수 없기 때문이다.
 set -euo pipefail
 
 # M4의 기본 디스크 조건은 처리량 제한이다. config.sh가 읽기 전에 기본값을 정한다.
@@ -45,7 +48,7 @@ ANON_MIB=650
 RATE_MIB=4
 BURST_MIB=""
 BURST_HOLD=""
-BURST_REST=10
+BURST_REST=""
 RECV_PORT=9999
 
 while [ $# -gt 0 ]; do
@@ -69,8 +72,8 @@ while [ $# -gt 0 ]; do
 done
 
 case "$LOAD" in
-    runaway_growth|spike_mem|burst_mem|normal_burst) ;;
-    *) echo "--load는 runaway_growth, spike_mem, burst_mem, normal_burst 중 하나여야 한다" >&2; exit 2 ;;
+    runaway_growth|spike_mem|normal_burst) ;;
+    *) echo "--load는 runaway_growth, spike_mem, normal_burst 중 하나여야 한다" >&2; exit 2 ;;
 esac
 case "$DAEMON" in
     none|dry|kill) ;;
@@ -79,15 +82,15 @@ esac
 
 # 부하별 기본값
 case "$LOAD" in
-    burst_mem)    : "${BURST_MIB:=500}"; : "${BURST_HOLD:=20}" ;;
-    normal_burst) : "${BURST_MIB:=300}"; : "${BURST_HOLD:=5}"; : "${OBSERVE_SEC:=300}" ;;
+    # 정상 버스트의 오탐 확인은 관찰 시간 전체를 본다.
+    normal_burst) : "${BURST_MIB:=400}"; : "${BURST_HOLD:=5}"; : "${BURST_REST:=10}"; : "${OBSERVE_SEC:=300}" ;;
 esac
 : "${OBSERVE_SEC:=600}"
 
-for v in CAP_SEC LOAD_SEC OBSERVE_SEC BASELINE_SEC PIN_MIB ANON_MIB RATE_MIB BURST_REST; do
+for v in CAP_SEC LOAD_SEC OBSERVE_SEC BASELINE_SEC PIN_MIB ANON_MIB RATE_MIB; do
     [[ "${!v}" =~ ^[0-9]+$ ]] || { echo "$v 는 0 이상의 정수여야 한다: ${!v}" >&2; exit 2; }
 done
-for v in BURST_MIB BURST_HOLD; do
+for v in BURST_MIB BURST_HOLD BURST_REST; do
     [ -z "${!v}" ] || [[ "${!v}" =~ ^[0-9]+$ ]] || { echo "$v 는 0 이상의 정수여야 한다: ${!v}" >&2; exit 2; }
 done
 [ "$LOAD_SEC" -gt 0 ] || { echo "--load-sec는 1 이상이어야 한다" >&2; exit 2; }
@@ -101,8 +104,7 @@ ANALYZE="$TG_ROOT/lab/analyze/m4_analyze.py"
 case "$LOAD" in
     runaway_growth) LOAD_ARGS="anon --size-mib $ANON_MIB --rate-mib $RATE_MIB" ;;
     spike_mem)      LOAD_ARGS="anon --size-mib $ANON_MIB --rate-mib 0" ;;
-    burst_mem|normal_burst)
-        LOAD_ARGS="burst --size-mib $BURST_MIB --hold $BURST_HOLD --rest $BURST_REST" ;;
+    normal_burst)   LOAD_ARGS="burst --size-mib $BURST_MIB --hold $BURST_HOLD --rest $BURST_REST" ;;
 esac
 
 mkdir -p "$OUT"
@@ -205,8 +207,16 @@ vm_run 30 "sudo systemd-run -q --unit=tg-load \
         /tmp/tg-load $LOAD_ARGS --duration $LOAD_SEC"
 sleep 2
 # 부하가 실제로 걸리지 않았는데 결과가 "스래싱 미발생"으로 기록되는 일을 막는다.
-vm_run 30 'systemctl is-active tg-load >/dev/null' \
-    || { echo "부하(tg-load)가 시작되지 않았다" >&2; vm_run 30 'cat /tmp/tg-load.out' >&2 || true; exit 1; }
+# 큰 덩어리를 즉시 할당하는 부하는 시작 직후에 VM을 멈춰 이 확인이 시간 초과될 수 있다.
+# 응답이 없는 것은 시작 실패가 아니므로 진행하고, 응답이 있는데 active가 아닐 때만 중단한다.
+load_state="$(vm_run 15 'systemctl is-active tg-load' 2>/dev/null || true)"
+case "$load_state" in
+    active|activating) ;;
+    "") log "부하 시작 직후 VM이 응답하지 않아 시작 여부를 확인하지 못했다(부하가 바로 VM을 멈춘 것일 수 있다). 계속한다" ;;
+    *) echo "부하(tg-load)가 시작되지 않았다 (상태: $load_state)" >&2
+       vm_run 30 'cat /tmp/tg-load.out' >&2 || true
+       exit 1 ;;
+esac
 
 # 실행 조건 기록. 계산 결과는 끝난 뒤 result.json에 합친다.
 RUN_ID="$ID" LOAD="$LOAD" LOAD_ARGS="$LOAD_ARGS" DAEMON="$DAEMON" CAP_SEC="$CAP_SEC" LOAD_SEC="$LOAD_SEC" \
@@ -229,6 +239,11 @@ deadline=$((SECONDS + LOAD_SEC + 180))
 status=running
 while [ "$SECONDS" -lt "$deadline" ]; do
     sleep 5
+    if [ "$LOAD" = normal_burst ]; then
+        status=observed
+        [ $(( $(date +%s) - LOAD_START_NS / 1000000000 )) -ge "$OBSERVE_SEC" ] && break
+        continue
+    fi
     status="$(python3 "$ANALYZE" "$OUT" --now-ns "$(date +%s%N)" --field status)"
     [ "$status" = running ] || break
 done

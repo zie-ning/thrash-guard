@@ -19,8 +19,8 @@
  * 효과 검증의 부하와 모드 대응(docs/validation/overview.md 3절, 실행은 lab/m4/run.sh):
  *   RUNAWAY_GROWTH   anon   (--size-mib 650 --rate-mib 4)
  *   SPIKE_MEM        anon   (--size-mib 650 --rate-mib 0, 즉시 할당 후 계속 접근)
- *   BURST_MEM        burst  (데몬의 10초 윈도보다 길게 유지: --hold 20 등)
- *   정상 버스트      burst  (짧게 유지: --size-mib 300 --hold 5)
+ *   정상 버스트      burst  (--size-mib 400 --hold 5 --rest 10)
+ *   (BURST_MEM은 폭주로 맞추지 못해 이번 검증에서 뺐다. 같은 burst 모드로 시험할 수 있다)
  *   필수 프로세스 E  canary
  *   배경(회수 불가)  pin    (--size-mib 43)
  * steady(정상 앱 W)와 file-thrash는 구현돼 있으나 이번 효과 검증에서는 쓰지 않는다.

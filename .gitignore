@@ -20,3 +20,4 @@ __pycache__/
 
 # 스모크 테스트 결과 (참고용으로만 로컬에 두고 커밋하지 않는다)
 /results/m1-smoke/
+/results/m4/**/samples.csv

@@ -1,7 +1,7 @@
 #!/bin/bash
 # M4 본 실행 목록을 순서대로 돌린다 (설계: docs/validation/overview.md 4절).
 #
-# 부하 3종(runaway_growth, spike_mem, burst_mem)을 dry-run과 켜짐(kill)으로 reps회씩, 정상 버스트(normal_burst)를
+# 폭주 2종(runaway_growth, spike_mem)을 dry-run과 켜짐(kill)으로 reps회씩, 정상 버스트(normal_burst)를
 # dry-run으로 reps회 돌린다. 시간 흐름에 따른 치우침(VM 호스트 상태 등)이 한 조건에 몰리지 않도록 회차마다
 # 모든 조건을 한 번씩 돌린다. 이미 result.json이 있는 실행은 건너뛰어 중단했다 다시 시작할 수 있다.
 #
@@ -31,7 +31,7 @@ done
 
 plan=()
 for rep in $(seq 1 "$REPS"); do
-    for load in runaway_growth spike_mem burst_mem; do
+    for load in runaway_growth spike_mem; do
         plan+=("$load dry $rep" "$load kill $rep")
     done
     plan+=("normal_burst dry $rep")

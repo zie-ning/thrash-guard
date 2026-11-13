@@ -131,6 +131,22 @@ class TestThrashAndResolve(Base):
         self.assertEqual(m4.evaluate(self.d, now_ns=LOAD_START + 130 * NS)["status"], "no_thrash")
 
 
+class TestPeaks(Base):
+    def test_peaks_after_load_start_only(self):
+        # 부하 시작(20초) 전의 80% 구간은 세지 않고, 이후 40~44초의 30%를 최대로 본다.
+        write_run(self.d, observe_sec=100)
+        write_samples(self.d, [(5, 15, 0.8), (40, 44, 0.3)], secs=200)
+        r = m4.evaluate(self.d, final=True)
+        self.assertAlmostEqual(r["full_peak_1s"], 0.3, delta=0.05)
+        self.assertLess(r["full_peak_10s_avg"], r["full_peak_1s"])
+        self.assertAlmostEqual(r["mem_avail_min_mib"], 100000 / 1024, delta=0.1)
+
+    def test_no_peaks_without_data(self):
+        write_run(self.d)
+        r = m4.evaluate(self.d, final=True)
+        self.assertIsNone(r["full_peak_1s"])
+
+
 class TestInvalidIntervals(Base):
     def test_seq_gap_breaks_the_t0_run(self):
         # 40~70초 스래싱 중 한가운데 seq를 하나 빼면 그 1초 구간이 무효가 되어 3초 연속이 성립하지 않는다.

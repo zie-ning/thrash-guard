@@ -263,6 +263,22 @@ def evaluate(d, now_ns=None, final=False):
     if final and status == "running":
         status = "incomplete"
 
+    # 부하 시작 이후의 압력 최대치. 부하 크기를 맞출 때 "압력은 올랐는가, T0까지 갔는가"를 보는 값이다.
+    peak_1s = peak_10s = None
+    if load_start is not None:
+        post = [b["ratio"] for b in buckets if b["start_ns"] >= load_start]
+        valid = [r for r in post if r is not None]
+        if valid:
+            peak_1s = round(max(valid), 3)
+        windows = [sum(post[i:i + 10]) / 10 for i in range(len(post) - 9) if None not in post[i:i + 10]]
+        if windows:
+            peak_10s = round(max(windows), 3)
+    avail_min_mib = None
+    if samples and load_start is not None:
+        post_avail = [s["avail_kb"] for s in samples if s["recv_ns"] >= load_start]
+        if post_avail:
+            avail_min_mib = round(min(post_avail) / 1024, 1)
+
     # 커널 OOM
     t_oom = None
     oom_delta = 0
@@ -322,10 +338,14 @@ def evaluate(d, now_ns=None, final=False):
         "resolve_time_s": diff(t_resolve, t0),
         "detect_delay_s": diff(t_detect, t0),
         "kill_to_resolve_s": diff(t_resolve, t_kill),
+        "full_peak_1s": peak_1s,
+        "full_peak_10s_avg": peak_10s,
+        "mem_avail_min_mib": avail_min_mib,
         "kernel_oom_kills": oom_delta,
         "first_actor": first_actor,
         "daemon_decision_before_kernel": daemon_before_kernel,
         "decision_without_thrash": first_decision is not None and t0 is None,
+        "decision_count": len(dlog["kills"]),
         "decisions": [
             {"t_s": rel(k["t_ns"]), "cand": k["cand"], "role": role_of(k["cand"]), "dry_run": k["dry_run"],
              "result": k["result"], "path": k["path"], "sys_avg_x100": k["sys_avg_x100"],
