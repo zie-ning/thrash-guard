@@ -219,6 +219,45 @@ static void test_recreated_cgroup_is_new_entry(void)
     rmdir(p);
 }
 
+static void test_match_filters_candidates(void)
+{
+    struct tg_targets x;
+
+    mk_cg("docker-1.scope", true, true);
+    mk_cg("docker-2.scope", true, true);
+    mk_cg("sshd.service", true, true);
+    mk_cg("myapp.service", true, true);
+
+    /* 패턴이 없으면(NULL) 모두 후보 */
+    tg_targets_init(&x);
+    TG_CHECK(tg_targets_rebuild(&x, NULL, root, 1, true) == 0);
+    TG_CHECK_EQ_U64(x.n, 4);
+    tg_targets_release(&x, NULL);
+
+    /* 패턴에 맞는 것만 후보가 된다 */
+    tg_targets_init(&x);
+    x.match = "docker-*.scope, myapp.service";
+    TG_CHECK(tg_targets_rebuild(&x, NULL, root, 1, true) == 0);
+    TG_CHECK_EQ_U64(x.n, 3);
+    TG_CHECK(tg_targets_find(&x, "docker-1.scope") != NULL);
+    TG_CHECK(tg_targets_find(&x, "docker-2.scope") != NULL);
+    TG_CHECK(tg_targets_find(&x, "myapp.service") != NULL);
+    TG_CHECK(tg_targets_find(&x, "sshd.service") == NULL);
+    tg_targets_release(&x, NULL);
+
+    /* 맞는 이름이 없으면 후보 0개 */
+    tg_targets_init(&x);
+    x.match = "nomatch-*";
+    TG_CHECK(tg_targets_rebuild(&x, NULL, root, 1, true) == 0);
+    TG_CHECK_EQ_U64(x.n, 0);
+    tg_targets_release(&x, NULL);
+
+    rm_cg("docker-1.scope");
+    rm_cg("docker-2.scope");
+    rm_cg("sshd.service");
+    rm_cg("myapp.service");
+}
+
 static void test_overflow(void)
 {
     struct tg_targets x;
@@ -311,10 +350,10 @@ static void test_scanner(void)
     mk_cg("a", true, true);
 
     /* 없는 경로면 시작하지 못한다 */
-    TG_CHECK(tg_scanner_start(&s, "/nonexistent/tg", 20) == -ENOENT);
+    TG_CHECK(tg_scanner_start(&s, "/nonexistent/tg", NULL, 20) == -ENOENT);
     tg_scanner_stop(&s); /* 시작 실패 후 호출해도 안전 */
 
-    TG_CHECK(tg_scanner_start(&s, root, 20) == 0);
+    TG_CHECK(tg_scanner_start(&s, root, NULL, 20) == 0);
     t = tg_scanner_acquire(&s);
     TG_CHECK_EQ_U64(t->n, 1);
     TG_CHECK(tg_targets_find(t, "a") != NULL);
@@ -345,7 +384,7 @@ static void test_scanner_holds_table(void)
     unsigned scans_before;
 
     mk_cg("a", true, true);
-    TG_CHECK(tg_scanner_start(&s, root, 20) == 0);
+    TG_CHECK(tg_scanner_start(&s, root, NULL, 20) == 0);
 
     /* 메인이 표를 잡고 있는 동안에는 그 표가 바뀌지 않는다 */
     t = tg_scanner_acquire(&s);
@@ -378,6 +417,7 @@ int main(void)
     TG_RUN(test_rebuild_reuse_and_remove);
     TG_RUN(test_rebuild_failure_keeps_cur);
     TG_RUN(test_recreated_cgroup_is_new_entry);
+    TG_RUN(test_match_filters_candidates);
     TG_RUN(test_overflow);
     TG_RUN(test_long_name);
     TG_RUN(test_scanner);

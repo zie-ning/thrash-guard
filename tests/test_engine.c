@@ -167,7 +167,7 @@ static void env_up_with(bool dry_run)
     o.nslots = 64;
     o.sink = test_sink;
     TG_CHECK(tg_log_open(&lg, &o) == 0);
-    TG_CHECK(tg_scanner_start(&sc, parent, 60000) == 0);
+    TG_CHECK(tg_scanner_start(&sc, parent, NULL, 60000) == 0);
     TG_CHECK(tg_engine_init(&eng, &cfg, &lg, &sc, psi_path, mem_path) == 0);
     now_ns = tg_now_ns(); /* 후보 표의 갱신 시각(실제 단조 시계)과 같은 시계를 쓴다 */
     env_up = true;
@@ -393,7 +393,7 @@ static void test_targets_full_is_reported(void)
         snprintf(name, sizeof(name), "X%02d", i);
         mk_cg(name, MIB(1));
     }
-    TG_CHECK(tg_scanner_start(&sc, parent, 60000) == 0);
+    TG_CHECK(tg_scanner_start(&sc, parent, NULL, 60000) == 0);
     tg_engine_trigger(&eng, now_ns);
     ticks(2, 0);
     ticks(1, 0); /* 같은 관찰에서는 한 번만 알린다 */
@@ -405,7 +405,7 @@ static void test_targets_full_is_reported(void)
 static void restart_scanner(void)
 {
     tg_scanner_stop(&sc);
-    TG_CHECK(tg_scanner_start(&sc, parent, 60000) == 0);
+    TG_CHECK(tg_scanner_start(&sc, parent, NULL, 60000) == 0);
 }
 
 static void test_unknown_protection_excludes_candidate(void)

@@ -23,7 +23,7 @@ PSI는 "누가 메모리 때문에 **멈췄는가**"를 잰다. 압력을 만든
 
 ## 3. 규칙
 
-종료 단위는 cgroup이고, 후보는 `target_parent`의 직계 자식이다. 모든 값은 최근 N초(기본 10초) 윈도 기준이다.
+종료 단위는 cgroup이고, 후보는 `target_parent`의 직계 자식 중 이름이 `target_match`에 맞는 것이다([overview.md](overview.md) 3절). 모든 값은 최근 N초(기본 10초) 윈도 기준이다.
 
 ### 3.1 제외
 

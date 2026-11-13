@@ -5,6 +5,8 @@
  */
 #include "targets.h"
 
+#include "match.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
@@ -106,6 +108,8 @@ static void add_entry(struct tg_targets *next, const struct tg_targets *cur, int
         return;
     if (name[0] == '.' && (nlen == 1 || (nlen == 2 && name[1] == '.')))
         return;
+    if (!tg_match_name(next->match, name))
+        return; /* 종료 후보로 삼을 이름이 아니다 */
 
     old = tg_targets_find(cur, name);
     if (old != NULL && !same_cgroup(dfd, name, nlen, old)) {

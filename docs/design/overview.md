@@ -46,7 +46,16 @@ flowchart TD
 **압력은 "시스템이 위험하다"를 알리는 데만 쓰고, 희생자는 메모리 사용량으로 고른다.** PSI는 메모리 때문에 *멈춘* 쪽을 재므로 원인이 아니라 피해자를 가리킬 수 있다.
 메모리를 크게 쥐고 잠든 프로세스는 자기 PSI가 0이다. 비슷한 도구(oomd, earlyoom, nohang)도 감지는 압력·여유량으로, 선택은 크기로 한다.
 
-종료 단위는 cgroup이고, 후보는 `target_parent`의 직계 자식이다.
+종료 단위는 cgroup이고, 후보는 `target_parent`의 직계 자식 중 **이름이 `target_match`에 맞는 것**이다.
+
+| 설정 | 의미 | 성격 |
+|---|---|---|
+| `target_match` | 여기까지만 죽일 수 있다(허용 범위) | 허용 목록. 데몬 설정에 이름 패턴을 쉼표로 적는다(`*`만 특별). 기본값은 컨테이너 런타임의 cgroup 이름(`docker-*.scope,libpod-*.scope,cri-containerd-*.scope,crio-*.scope`, 임시, VM에서 확인 필요). 서비스를 후보로 쓰려면 이름을 직접 적고, 전부 쓰려면 `*`를 적는다 |
+| 보호(`OOMScoreAdjust=-1000`) | 그 안에서도 이건 죽이지 않는다(예외) | 거부 목록. 각 서비스 설정에 적는다 |
+
+두 장치는 실패하는 방식이 달라 겹쳐 쓴다. 허용 범위에 필수 서비스가 잘못 들어가도 보호 표시가 막고, 보호 표시를 빠뜨려도 허용 범위 밖이면 후보가 아니다.
+기본 `target_parent`는 `/sys/fs/cgroup/system.slice`다(서비스를 등록하면 보통 여기에 들어가므로, 도커 호스트는 설정 없이 컨테이너만 후보가 된다). 이름에 맞는 cgroup이 하나도 없으면 데몬은 시작하되 "아무것도 종료하지 않는다"는 경고를 로그에 남긴다.
+프리셋(이름 하나로 패턴 묶음을 쓰는 방식)과 내장 제외 목록은 만들지 않았다. 일반 서비스는 사용자가 이름을 직접 적는다. dry-run 로그의 후보별 지표로 어떤 이름을 넣을지 확인할 수 있다.
 
 1. **제외**: 보호된 cgroup([design/protection.md](protection.md)), 시작 직후 유예 중, 윈도가 덜 찬 후보.
 2. **자격**: 최근 10초 최대 사용량(`memory.current`)이 전체 메모리의 10% 이상이어야 한다. 미달이면 종료하지 않고 `no_culprit`으로 기록한다.
@@ -142,6 +151,7 @@ MVP는 `cgroup_kill` 한 가지다. 선택한 cgroup의 `cgroup.kill`에 `1`을 
 | `src/daemon/sample` | 샘플 수집(시스템 PSI, meminfo, 후보별 `memory.current`) | 완료 |
 | `src/daemon/engine` | 트리거·틱 처리: 샘플 → 판단 → 로그·종료 실행·정책 기록 | 완료 |
 | `src/daemon/loop` | 이벤트 루프: `poll`, `signalfd`, PSI 트리거 등록 | 완료 |
+| `src/daemon/match` | 후보 이름 패턴(`target_match`) | 완료 |
 | `src/daemon/protect` | 보호된 cgroup 판정(하위 재귀, 확인 불가는 보호로 취급) | 완료 |
 | `src/daemon/main` | CLI, 설정 로드, 시작 순서와 정리 | 완료 (서비스 파일은 미구현) |
 
@@ -157,6 +167,7 @@ MVP는 `cgroup_kill` 한 가지다. 선택한 cgroup의 `cgroup.kill`에 `1`을 
 | 후보 자격 하한(`min_size_pct`), 증가 인정 최소량(`min_growth_pct`) | 전체의 10%, 1% | 근거 없음 |
 | 유예, 쿨다운, 시간당 상한 | 30초, 60초, 3회 | 안전 여유값 |
 | 로그 링버퍼 | 16 KiB (64줄) | |
+| 기본 `target_parent`, `target_match` | `system.slice`, 컨테이너 런타임 이름 패턴 | 임시, VM에서 확인 |
 | 후보 목록 스캔 주기 | 1초 | 임시 |
 | 보호 확인의 하위 cgroup 깊이, 표가 낡았다고 보는 시간 | 8단계, 10초 | 스캔 스레드 스택(64 KiB)과 버퍼에서 계산, 근거 약함 |
 | 루프 지연 경고 | 틱 간격의 2배 이상 | 임시 |
@@ -169,7 +180,7 @@ MVP는 `cgroup_kill` 한 가지다. 선택한 cgroup의 `cgroup.kill`에 `1`을 
 - 언어는 **C**(C11)다. 핵심 경로가 시스템 콜 몇 개이고 런타임과 GC가 없어 무할당을 검증하기 쉽다.
 - 대상 환경은 cgroup v2, PSI 활성, `cgroup.kill` 지원(리눅스 5.14 이상), root 권한이다. PSI 트리거 등록은 root가 필요한 것을 확인했다([lab/environment.md](../lab/environment.md)).
 - 빌드는 단일 `Makefile`, 테스트는 자체 최소 assert 헤더와 `/proc` 파일 fixture, 정적 링크 libc는 glibc와 musl을 모두 지원하고 실측으로 기본값을 고른다.
-- **미결**: 컨테이너가 없는 일반 서버의 기본 `target_parent`. 시작 시 `cgroup.kill` 지원 여부 확인(커널 5.14 미만이면 종료 시점에 `-ENOTSUP`으로만 드러난다).
+- **미결**: 컨테이너 런타임별 실제 cgroup 이름(기본 `target_match`는 임시이며 cgroupfs 드라이버의 `/docker/<id>` 형식은 `target_parent`를 바꿔야 한다). 시작 시 `cgroup.kill` 지원 여부 확인(커널 5.14 미만이면 종료 시점에 `-ENOTSUP`으로만 드러난다).
 
 ## 11. 참고 자료
 
