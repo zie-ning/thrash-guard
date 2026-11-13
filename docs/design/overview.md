@@ -98,8 +98,10 @@ MVP는 `cgroup_kill` 한 가지다. 선택한 cgroup의 `cgroup.kill`에 `1`을 
 관찰 중이 아니면 대기 시간 없이(무한) 잠든다. 틱 시각은 별도 타이머 fd 없이 `poll`의 대기 시간으로 처리한다. 틱 사이의 간격이 조금 흔들려도 판단 함수가 실제 경과 시간으로 평균을 내므로 정확한 주기는 필요하지 않다.
 
 **시작 순서**: ① 신호를 막고 `signalfd`를 만든다(어떤 스레드보다 먼저. 새 스레드는 막힌 상태를 물려받아 어느 스레드도 신호로 끊기지 않는다. SIGPIPE는 무시한다) → ② 설정 로드·검증 → ③ 로그 시작 → ④ 자기 보호(`mlockall`, `oom_score_adj`) →
-⑤ 후보 스캔 시작(첫 스캔은 동기) → ⑥ 엔진 준비(`/proc/pressure/memory`, `/proc/meminfo`를 한 번 열어 둠) → ⑦ PSI 트리거 등록 → ⑧ 루프. 자기 보호가 실패하면 경고만 남기고 계속하지만,
+⑤ 후보 스캔 시작(첫 스캔은 동기) → ⑤' 환경 점검(아래) → ⑥ 엔진 준비(`/proc/pressure/memory`, `/proc/meminfo`를 한 번 열어 둠) → ⑦ PSI 트리거 등록 → ⑧ 루프. 자기 보호가 실패하면 경고만 남기고 계속하지만,
 **후보 탐색이나 트리거 등록에 실패하면 시작을 거부한다**(종료 코드 4). 안전장치가 켜진 척하면서 아무것도 못 하는 상태가 가장 위험하기 때문이다. 트리거 없이 항상 감시하는 대체 모드는 만들지 않았다.
+
+**환경 점검**(`envcheck`): 종료 때에야 드러날 환경 문제를 시작할 때 확인한다. 확인 항목은 ① `target_parent`가 cgroup v2 파일 시스템인지, ② `target_parent`의 `cgroup.subtree_control`에 `memory`가 있는지(없으면 자식에 `memory.current`가 없다), ③ 첫 후보의 `cgroup.kill`이 있고 쓸 수 있는지(커널 5.14 이상)이다. 문제가 있으면 dry-run은 경고만 남기고 시작한다(판단 로그를 보는 용도는 쓸 수 있다). **실제 종료 모드는 시작을 거부한다**(종료 코드 4). 후보가 하나도 없으면 ③은 확인하지 못하고 "후보 없음" 경고만 남는다. 후보가 나중에 생겼을 때 `cgroup.kill`이 없는 경우는 종료 시점에 `-ENOTSUP`으로 드러난다.
 
 **틱 한 번의 처리**(`engine`): 후보 표를 잡고 → 샘플 수집(시스템 PSI `full` 누적, `MemAvailable`, 후보별 `memory.current`를 `pread`로 읽음) → 판단 함수 → 결정 처리 → 표를 놓는다.
 시스템 값을 읽지 못하면 그 틱은 판단하지 않고 계속 관찰한다(지속되면 한 번 경고). 후보 하나의 `memory.current`를 읽지 못하면 그 후보만 뺀다.
@@ -153,6 +155,7 @@ MVP는 `cgroup_kill` 한 가지다. 선택한 cgroup의 `cgroup.kill`에 `1`을 
 | `src/daemon/loop` | 이벤트 루프: `poll`, `signalfd`, PSI 트리거 등록 | 완료 |
 | `src/daemon/match` | 후보 이름 패턴(`target_match`) | 완료 |
 | `src/daemon/protect` | 보호된 cgroup 판정(하위 재귀, 확인 불가는 보호로 취급) | 완료 |
+| `src/daemon/envcheck` | 시작 시 환경 점검(cgroup v2, memory 컨트롤러, `cgroup.kill`) | 완료 |
 | `src/daemon/main` | CLI, 설정 로드, 시작 순서와 정리 | 완료 (서비스 파일은 미구현) |
 
 ## 9. 초기값과 목표 수치 (모두 측정 전 임시값)
@@ -180,7 +183,7 @@ MVP는 `cgroup_kill` 한 가지다. 선택한 cgroup의 `cgroup.kill`에 `1`을 
 - 언어는 **C**(C11)다. 핵심 경로가 시스템 콜 몇 개이고 런타임과 GC가 없어 무할당을 검증하기 쉽다.
 - 대상 환경은 cgroup v2, PSI 활성, `cgroup.kill` 지원(리눅스 5.14 이상), root 권한이다. PSI 트리거 등록은 root가 필요한 것을 확인했다([lab/environment.md](../lab/environment.md)).
 - 빌드는 단일 `Makefile`, 테스트는 자체 최소 assert 헤더와 `/proc` 파일 fixture, 정적 링크 libc는 glibc와 musl을 모두 지원하고 실측으로 기본값을 고른다.
-- **미결**: 컨테이너 런타임별 실제 cgroup 이름(기본 `target_match`는 임시이며 cgroupfs 드라이버의 `/docker/<id>` 형식은 `target_parent`를 바꿔야 한다). 시작 시 `cgroup.kill` 지원 여부 확인(커널 5.14 미만이면 종료 시점에 `-ENOTSUP`으로만 드러난다).
+- **미결**: 컨테이너 런타임별 실제 cgroup 이름(기본 `target_match`는 임시이며 cgroupfs 드라이버의 `/docker/<id>` 형식은 `target_parent`를 바꿔야 한다). 후보가 없는 상태로 시작했을 때 `cgroup.kill` 지원 여부는 시작 시 확인하지 못한다.
 
 ## 11. 참고 자료
 

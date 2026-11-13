@@ -16,6 +16,7 @@
 
 #include "config.h"
 #include "engine.h"
+#include "envcheck.h"
 #include "loop.h"
 #include "scanner.h"
 #include "selfprot.h"
@@ -94,6 +95,10 @@ static int run_daemon(const struct tg_config *cfg)
     struct tg_selfprot_opts sp;
     struct tg_selfprot_result spr;
     struct tg_loop_fds fds;
+    struct tg_env_report env;
+    char sample_child[TG_TARGET_NAME_CAP];
+    bool have_child = false;
+    bool env_fail = false;
     int sig_fd;
     int trigger_fd;
     int rc;
@@ -133,9 +138,27 @@ static int run_daemon(const struct tg_config *cfg)
         const struct tg_targets *t = tg_scanner_acquire(&g_scanner);
         bool none = t->n == 0;
 
+        if (!none)
+            memcpy(sample_child, t->t[0].name, sizeof(sample_child));
         tg_scanner_release(&g_scanner);
         if (none)
             log_msg(TG_LOG_WARN, "no cgroup under target_parent matches target_match, nothing will be terminated");
+        have_child = !none;
+    }
+
+    /* 실행 환경 점검: 종료 때에야 드러날 문제를 시작 때 알린다. 실제 종료 모드에서는 시작을 거부한다. */
+    tg_env_check(cfg->target_parent, have_child ? sample_child : NULL, &env);
+    for (int i = 0; i < env.n; i++) {
+        if (cfg->dry_run) {
+            log_msg(TG_LOG_WARN, env.issue[i]);
+        } else {
+            fprintf(stderr, "thrash-guard: 환경 점검 실패: %s\n", env.issue[i]);
+            env_fail = true;
+        }
+    }
+    if (env_fail) {
+        fputs("  --dry-run으로는 시작할 수 있지만 실제 종료는 동작하지 않는다.\n", stderr);
+        goto fail_scanner;
     }
 
     rc = tg_engine_init(&g_engine, cfg, &g_log, &g_scanner, "/proc/pressure/memory",
