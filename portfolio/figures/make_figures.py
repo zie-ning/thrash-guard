@@ -5,16 +5,16 @@
 만드는 그림
   fig_2_2_livelock_timeline.svg  굳어진 livelock 한 번의 시계열: 가용 메모리, 10초 평균 memory full과 io full,
                                  로그인 불가 구간
-  fig_2_3_rule_comparison.svg    같은 조건 dry-run 3회: 10초 평균 memory full/io full과 임계값, 기존 규칙과
-                                 io 경로를 더한 규칙의 첫 종료 결정 시각
+  fig_2_3_first_decision.svg     같은 조건 dry-run 5회: 10초 평균 memory full/io full과 임계값, 가장 먼저
+                                 충족한 종료 결정 시각
 
-데이터: results/m3/20261113/G_throughput_dry_{1,2,3} (처리량 약 10.9 MB/s 제한, 데몬 dry-run)
+데이터: results/m3/20261113/G_throughput_dry_{1,2,3}, H_iopath_dry_{1,2} (처리량 약 10.9 MB/s 제한, 데몬 dry-run)
   psi.tsv          psirec 기록. 에포크ms memory_some memory_full io_some io_full cpu_some cpu_full MemAvailable_kB ...
   ssh_login.probe  10초 간격 전체 로그인 시도. 시작에포크 걸린초 종료코드 | 상태
 
 종료 결정 시각(DECISIONS)은 lab/analyze/replay_judge.c로 같은 기록을 재생한 값이다(아래 명령으로 다시 구할 수 있다).
-  replay_judge <psi.tsv> 10 0     # 기존 규칙(io 경로 끔)
-  replay_judge <psi.tsv> 10 50    # io 경로 추가
+두 종료 조건(memory 경로, io 경로)을 함께 켠 판단 함수에서 가장 먼저 종료를 결정한 시각이다.
+  replay_judge <psi.tsv> 10 50
 시각 0은 가용 메모리가 처음 30 MiB 미만이 된 때다.
 
 사용법: python portfolio/figures/make_figures.py
@@ -26,18 +26,19 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 DATA = os.path.join(ROOT, 'results', 'm3', '20261113')
 OUT = os.path.dirname(os.path.abspath(__file__))
 
-# replay_judge 결과: (기존 규칙 첫 종료 결정, io 경로를 더한 규칙의 첫 종료 결정), 시각 0 기준 초
+# replay_judge 결과: 첫 종료 결정 시각, 시각 0 기준 초
 DECISIONS = {
-    'G_throughput_dry_1': (147, 24),
-    'G_throughput_dry_2': (67, 22),
-    'G_throughput_dry_3': (19, 19),
+    'G_throughput_dry_1': 24,
+    'G_throughput_dry_2': 22,
+    'G_throughput_dry_3': 19,
+    'H_iopath_dry_1': 16,
+    'H_iopath_dry_2': 26,
 }
 
 FONT = "'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans CJK KR', 'NanumGothic', sans-serif"
 C_MEM = '#1f6fb4'
 C_IO = '#e8750a'
 C_AVAIL = '#555555'
-C_OLD = '#c0392b'
 C_NEW = '#1e8449'
 C_FAIL = '#f4b6b0'
 C_GRID = '#dddddd'
@@ -247,17 +248,11 @@ def fig_timeline():
     bot.curve(mem1, t0, C_MEM, 0.8, 0.35)
     bot.curve(io, t0, C_IO, 2.2)
     bot.curve(mem, t0, C_MEM, 2.2)
-    bot.hline(40, '#888888', '6 4')
-    svg.text(bot.px(-55), bot.py(40) - 5, '기존 임계 40%', 11, 'start', '#666666')
     bot.hline(10, C_NEW, '6 4')
-    svg.text(bot.px(-55), bot.py(10) - 5, '현재 임계 10%', 11, 'start', C_NEW)
+    svg.text(bot.px(-55), bot.py(10) - 5, 'memory 경로 임계 10%', 11, 'start', C_NEW)
+    bot.hline(50, C_IO, '2 4')
+    svg.text(bot.px(-55), bot.py(50) - 5, 'io 경로 임계 50%', 11, 'start', C_IO)
     svg.text(bot.px(-55), bot.py(94), '(b) 10초 평균', 12, 'start', '#222222', 'bold')
-
-    # 폭주 컨테이너가 설정한 실행 시간(420초)이 끝나 메모리가 돌아온 시점
-    back = next((t - t0 for t, v in avail if t - t0 > 0 and v > 200), None)
-    if back is not None:
-        svg.line(bot.px(back), bot.y, bot.px(back), bot.y + bot.h, '#666666', 1.2, '3 3')
-        svg.text(bot.px(back) - 6, bot.py(62), '폭주 컨테이너의 설정 시간(420초)이 끝나 해소', 11, 'end', '#444444')
 
     legend(svg, 80, 620, [('memory full (10초 평균)', C_MEM, False), ('io full (10초 평균)', C_IO, False),
                           ('memory full (1초, 옅게)', '#8fb7d9', False)])
@@ -271,7 +266,9 @@ def fig_timeline():
 
 
 def fig_rules():
-    runs = ['G_throughput_dry_1', 'G_throughput_dry_2', 'G_throughput_dry_3']
+    runs = ['G_throughput_dry_1', 'G_throughput_dry_2', 'G_throughput_dry_3',
+            'H_iopath_dry_1', 'H_iopath_dry_2']
+    n = len(runs)
     data = []
     for r in runs:
         rows = load_psi(r)
@@ -281,49 +278,42 @@ def fig_rules():
     xr = (-60, tmax)
     xticks = [-60] + list(range(0, tmax + 1, 60))
 
-    ph = 150
-    gap = 56
-    W, H = 980, 90 + 3 * ph + 2 * gap + 170
+    ph = 120
+    gap = 46
+    W, H = 980, 90 + n * ph + (n - 1) * gap + 150
     svg = Svg(W, H)
-    svg.text(W / 2, 28, '기존 규칙과 io 경로를 더한 규칙: 첫 종료 결정 시각 비교', 17, 'middle', '#111111', 'bold')
-    svg.text(W / 2, 48, '같은 조건 dry-run 3회, 기록을 실제 판단 함수에 재생한 값. 시각 0 = 가용 메모리가 처음 30 MiB 미만이 된 때',
+    svg.text(W / 2, 28, '종료 결정 시각: 두 조건 중 가장 먼저 충족된 때', 17, 'middle', '#111111', 'bold')
+    svg.text(W / 2, 48, '같은 조건 dry-run 5회, 기록을 실제 판단 함수에 재생한 값. 시각 0 = 가용 메모리가 처음 30 MiB 미만이 된 때',
              12, 'middle', '#555555')
 
     for k, (run, rows, t0, mem, io) in enumerate(data):
         y = 80 + k * (ph + gap)
         p = Panel(svg, 80, y, 860, ph, xr, (0, 100))
-        last = k == 2
-        p.frame([0, 25, 50, 75, 100], '{:g}%', xticks if last else None,
+        last = k == n - 1
+        p.frame([0, 50, 100], '{:g}%', xticks if last else None,
                 '가용 메모리가 바닥난 뒤 경과 시간 (초)' if last else None, '10초 평균')
         p.curve(io, t0, C_IO, 1.8)
         p.curve(mem, t0, C_MEM, 2.2)
-        p.hline(40, '#888888', '6 4', 1.1)
         p.hline(10, C_NEW, '6 4', 1.1)
         p.hline(50, C_IO, '2 4', 1.1)
-        old, new = DECISIONS[run]
+        t_dec = DECISIONS[run]
         svg.text(p.px(-56), y - 8, f'실행 {k + 1}', 12, 'start', '#222222', 'bold')
-        if old == new:
-            p.vline(old, C_NEW, None, 2.2)
-            svg.label(p.px(old) + 8, p.py(60), f'두 규칙 모두 +{old}초', C_NEW)
-        else:
-            p.vline(old, C_OLD, '7 4', 2.2)
-            svg.label(p.px(old) + 8, p.py(35), f'기존 규칙 +{old}초', C_OLD)
-            p.vline(new, C_NEW, None, 2.2)
-            svg.label(p.px(new) + 8, p.py(65), f'io 경로 추가 +{new}초', C_NEW)
+        p.vline(t_dec, C_NEW, None, 2.2)
+        svg.label(p.px(t_dec) + 8, p.py(62), f'종료 결정 +{t_dec}초', C_NEW)
 
-    ly = 90 + 3 * ph + 2 * gap + 70
+    ly = 90 + n * ph + (n - 1) * gap + 70
     legend(svg, 80, ly, [('memory full', C_MEM, False), ('io full', C_IO, False)])
-    svg.line(360, ly - 4, 386, ly - 4, '#888888', 2, '6 4')
-    svg.text(392, ly, '기존 임계 40%', 12)
-    svg.line(500, ly - 4, 526, ly - 4, C_NEW, 2, '6 4')
-    svg.text(532, ly, '현재 memory 임계 10%', 12)
-    svg.line(690, ly - 4, 716, ly - 4, C_IO, 2, '2 4')
-    svg.text(722, ly, 'io 경로 임계 50%', 12)
-    svg.text(80, ly + 28, '굳어진 뒤에는 memory full 평균이 임계 아래로 내려가지만 io full은 90% 안팎으로 유지된다. 가용 메모리 조건(io 경로는 5% 이하)이 함께 필요하다.',
+    svg.line(300, ly - 4, 326, ly - 4, C_NEW, 2, '6 4')
+    svg.text(332, ly, 'memory 경로 임계 10%', 12)
+    svg.line(520, ly - 4, 546, ly - 4, C_IO, 2, '2 4')
+    svg.text(552, ly, 'io 경로 임계 50%', 12)
+    svg.text(80, ly + 28, '굳어진 뒤에는 memory full 평균이 임계 아래로 내려가지만 io full은 90% 안팎으로 유지된다. 두 경로 모두 가용 메모리 조건이 함께 필요하다.',
              11, 'start', '#555555')
-    svg.text(80, ly + 46, '출처: results/m3/20261113/G_throughput_dry_1..3, 종료 결정 시각은 lab/analyze/replay_judge.c 재생 결과. 각 1회, 총 3회.',
+    svg.text(80, ly + 46, '출처: results/m3/20261113/G_throughput_dry_1..3, H_iopath_dry_1..2. 종료 결정 시각은 lab/analyze/replay_judge.c 재생 결과. 실행 4, 5는 최종 판단 규칙 빌드의 기록이다.',
              11, 'start', '#777777')
-    path = os.path.join(OUT, 'fig_2_3_rule_comparison.svg')
+    svg.text(80, ly + 64, '5회 모두 데몬은 판단만 했고(종료하지 않음) 정지는 부하가 끝날 때까지 이어졌다.',
+             11, 'start', '#777777')
+    path = os.path.join(OUT, 'fig_2_3_first_decision.svg')
     svg.save(path)
     return path
 
