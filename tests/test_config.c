@@ -35,7 +35,10 @@ static void test_defaults(void)
     TG_CHECK(c.dry_run);
     TG_CHECK(c.mlock);
     TG_CHECK(c.oom_score_adj == -1000);
-    TG_CHECK(strcmp(c.target_parent, "/sys/fs/cgroup/workload.slice") == 0);
+    TG_CHECK(strcmp(c.target_parent, "/sys/fs/cgroup/system.slice") == 0);
+    /* 기본 후보는 컨테이너 런타임의 cgroup 이름뿐이다 */
+    TG_CHECK(strstr(c.target_match, "docker-*.scope") != NULL);
+    TG_CHECK(strchr(c.target_match, ' ') == NULL);
     TG_CHECK_EQ_U64(tg_config_window_samples(&c), 40);
     TG_CHECK(tg_config_validate(&c, &e) == 0);
 }
@@ -164,6 +167,30 @@ static void test_bad_syntax(void)
     TG_CHECK(e.line == 4);
 }
 
+static void test_target_match(void)
+{
+    struct tg_config c;
+    struct tg_cfg_err e;
+
+    /* 사용자가 서비스 이름을 직접 적는다 */
+    TG_CHECK(parse("target_match = myapp.service, worker@*.service\n", &c, &e) == 0);
+    TG_CHECK(strcmp(c.target_match, "myapp.service, worker@*.service") == 0);
+    TG_CHECK(parse("target_match=*\n", &c, &e) == 0);
+
+    /* 잘못된 패턴은 파싱은 되지만 검증에서 시작을 거부한다 */
+    TG_CHECK(parse("target_match=\n", &c, &e) == 0);
+    TG_CHECK(tg_config_validate(&c, &e) == -EINVAL);
+    TG_CHECK(strcmp(e.key, "target_match") == 0);
+    TG_CHECK(parse("target_match=a,,b\n", &c, &e) == 0);
+    TG_CHECK(tg_config_validate(&c, &e) == -EINVAL);
+    TG_CHECK(parse("target_match=a/b\n", &c, &e) == 0);
+    TG_CHECK(tg_config_validate(&c, &e) == -EINVAL);
+    TG_CHECK(parse("target_match=a,\n", &c, &e) == 0);
+    TG_CHECK(tg_config_validate(&c, &e) == -EINVAL);
+    TG_CHECK(parse("target_match=myapp.service\n", &c, &e) == 0);
+    TG_CHECK(tg_config_validate(&c, &e) == 0);
+}
+
 static void test_dry_run_policy(void)
 {
     struct tg_config c;
@@ -290,6 +317,7 @@ int main(void)
     TG_RUN(test_unknown_key);
     TG_RUN(test_bad_values);
     TG_RUN(test_bad_syntax);
+    TG_RUN(test_target_match);
     TG_RUN(test_dry_run_policy);
     TG_RUN(test_validate);
     TG_RUN(test_validate_zero);

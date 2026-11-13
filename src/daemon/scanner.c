@@ -64,7 +64,7 @@ static void *scan_main(void *arg)
     return NULL;
 }
 
-int tg_scanner_start(struct tg_scanner *s, const char *parent, uint32_t interval_ms)
+int tg_scanner_start(struct tg_scanner *s, const char *parent, const char *match, uint32_t interval_ms)
 {
     pthread_attr_t attr;
     size_t plen = strlen(parent);
@@ -84,6 +84,13 @@ int tg_scanner_start(struct tg_scanner *s, const char *parent, uint32_t interval
     atomic_init(&s->scan_errors, 0);
     memcpy(s->parent, parent, plen + 1);
     s->interval_ms = interval_ms;
+    if (match != NULL) {
+        if (strlen(match) >= sizeof(s->match))
+            return -EINVAL;
+        memcpy(s->match, match, strlen(match) + 1);
+        s->tbl[0].match = s->match;
+        s->tbl[1].match = s->match;
+    }
 
     s->proc_fd = open("/proc", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     if (s->proc_fd < 0)

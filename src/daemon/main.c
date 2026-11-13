@@ -47,13 +47,14 @@ static void print_config(const struct tg_config *c, bool foreground)
             "thrash-guard 유효 설정:\n"
             "  모드: %s%s\n"
             "  target_parent=%s\n"
+            "  target_match=%s\n"
             "  trigger: full %u/%u us\n"
             "  판단: 최근 %u초 평균 full >= %u%% (샘플 %u ms, %u칸)\n"
             "  안전장치: grace %u초, cooldown %u초, 시간당 최대 %u회\n"
             "  로그: %s (링버퍼 %u KiB)\n"
             "  자기 보호: mlock=%s, oom_score_adj=%d\n",
             c->dry_run ? "dry-run (종료하지 않음)" : "실제 종료",
-            foreground ? ", foreground" : "", c->target_parent,
+            foreground ? ", foreground" : "", c->target_parent, c->target_match,
             (unsigned)c->trigger_stall_us, (unsigned)c->trigger_window_us,
             (unsigned)c->sustain_sec, (unsigned)c->full_pct, (unsigned)c->sample_interval_ms,
             (unsigned)tg_config_window_samples(c), (unsigned)c->startup_grace_sec,
@@ -120,11 +121,21 @@ static int run_daemon(const struct tg_config *cfg)
     if (spr.oom_adj_err > 0)
         log_msg(TG_LOG_WARN, "self protection: oom_score_adj failed");
 
-    rc = tg_scanner_start(&g_scanner, cfg->target_parent, SCAN_INTERVAL_MS);
+    rc = tg_scanner_start(&g_scanner, cfg->target_parent, cfg->target_match, SCAN_INTERVAL_MS);
     if (rc != 0) {
         fprintf(stderr, "thrash-guard: 후보 탐색을 시작할 수 없다: %s: %s\n", cfg->target_parent,
                 strerror(-rc));
         goto fail_log;
+    }
+
+    /* 후보가 하나도 없으면 데몬은 아무것도 종료하지 못한다. 켜져 있어도 동작하지 않는 상태를 알린다. */
+    {
+        const struct tg_targets *t = tg_scanner_acquire(&g_scanner);
+        bool none = t->n == 0;
+
+        tg_scanner_release(&g_scanner);
+        if (none)
+            log_msg(TG_LOG_WARN, "no cgroup under target_parent matches target_match, nothing will be terminated");
     }
 
     rc = tg_engine_init(&g_engine, cfg, &g_log, &g_scanner, "/proc/pressure/memory",

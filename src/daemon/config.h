@@ -26,11 +26,19 @@
 #include <stdint.h>
 
 #define TG_CFG_PATH_CAP 256        /* 경로 문자열 용량(NUL 포함) */
+#define TG_CFG_MATCH_CAP 512      /* target_match 문자열 용량(NUL 포함) */
 #define TG_MAX_WINDOW_SAMPLES 256 /* 지속 판단 고정 배열의 최대 칸 수. 후보 32개 x 2배열이 mlock되므로 작게 둔다 */
 
 struct tg_config {
     /* 감시·종료 대상 구역. 이 cgroup의 memory.pressure를 감시하고 그 하위만 종료한다 */
     char target_parent[TG_CFG_PATH_CAP];
+
+    /*
+     * 종료 후보로 삼을 하위 cgroup의 이름 패턴(쉼표로 구분, '*'만 특별). target_parent의 직계 자식 중
+     * 이름이 맞는 것만 후보가 된다. 기본값은 컨테이너 런타임의 cgroup 이름이다. 일반 서비스를 후보로
+     * 쓰려면 사용자가 서비스 이름을 직접 적는다. 모든 것을 후보로 쓰려면 "*"를 적는다.
+     */
+    char target_match[TG_CFG_MATCH_CAP];
 
     /* 커널 PSI 트리거: window_us 동안 stall_us 이상 멈추면 깨운다 */
     uint32_t trigger_stall_us;
