@@ -5,16 +5,22 @@
 실행이 끝난 뒤에는 같은 코드로 최종 결과(result.json)를 만든다. 기준이 한 곳에만 있어 두 결과가 어긋나지 않는다.
 
 계산하는 값 (시각은 모두 VM 밖 수신기 시계, 결과는 부하 시작 기준 초):
-  T0         시스템 PSI full의 1초 구간 비율이 10% 이상인 상태가 처음 3초 연속된 구간의 시작
-  T_resolve  T0 이후, 비율이 10% 미만인 상태가 처음 10초 연속된 구간의 **끝**
-             (조건이 충족된 시점. 그래서 종료 즉시 회복해도 해소 시간에는 최소 10초가 더해진다)
+  T0         VM 밖 SSH 프로브(1초 간격, 새 연결)가 처음 3번 연속 실패한 첫 프로브의 시작 시각
+  T_resolve  T0 이후, SSH 프로브가 처음 5번 연속 성공한 시점(5번째 성공의 완료 시각)
   해소 시간  T_resolve - T0. T0 + cap(기본 300초) 안에 T_resolve가 없으면 unresolved
   T_detect   데몬 판단 로그의 첫 `judge kill` (dry-run 포함)
   T_kill     실제 종료(dry_run=0, result=0)의 `judge kill`
   T_oom      커널 oom_kill 카운터가 처음 늘어난 샘플의 수신 시각
 
+T0와 해소는 "서버에 접속할 수 없게 된 시점"과 "다시 접속되는 시점"이다. 연속 횟수(3, 5)는 임시값이다.
+프로브는 시작 시각 순으로 늘어놓고 연속을 센다(멈춘 동안에는 프로브가 겹쳐 돌 수 있다).
+
+보조 기록(psi): PSI 기준의 같은 값. 판정에는 쓰지 않고 SSH 기준과 어긋나는지 보는 용도다.
+  psi T0        시스템 PSI full의 1초 구간 비율의 10초 평균이 10% 이상인 첫 창 안에서, 처음 10% 이상인 구간의 시작
+  psi 해소      psi T0 이후 비율이 10% 미만인 구간이 10초 연속된 구간의 끝
+  어긋남        한쪽만 T0가 있거나, 둘 다 있는데 10초 넘게 차이가 난다
 PSI 비율은 누적값 total의 차분으로 계산한다(avg10은 짧은 stall을 놓친다).
-일련번호(seq)가 건너뛴 샘플 구간이 겹치는 1초 구간은 무효로 보고, 무효 구간은 3초·10초 연속 조건을 끊는다.
+일련번호(seq)가 건너뛴 샘플 구간이 겹치는 1초 구간은 무효로 보고, 무효 구간은 10초 조건을 끊는다.
 
 판정(status):
   running     아직 확정되지 않았다 (실행 중에만)
@@ -47,9 +53,12 @@ import verdict as sv  # noqa: E402  (load_probes를 재사용한다)
 
 NS = 1_000_000_000
 US_PER_S = 1_000_000
-FULL_RATIO = 0.10          # T0, T_resolve의 10% 기준 (관찰 기준이며 데몬 임계와 별개)
-T0_RUN_S = 3               # T0: 10% 이상이 이만큼 연속
-RESOLVE_RUN_S = 10         # T_resolve: 10% 미만이 이만큼 연속
+SSH_FAIL_RUN = 3           # T0: SSH 프로브가 이만큼 연속 실패
+SSH_OK_RUN = 5             # T_resolve: SSH 프로브가 이만큼 연속 성공
+FULL_RATIO = 0.10          # 보조 기록(psi)의 10% 기준 (관찰 기준이며 데몬 임계와 별개)
+PSI_WINDOW_S = 10          # 보조 기록(psi): T0는 이 창의 평균이 10% 이상일 때
+RESOLVE_RUN_S = 10         # 보조 기록(psi): 해소는 10% 미만이 이만큼 연속
+PSI_DISAGREE_S = 10        # 보조 기록(psi): 두 T0가 이보다 많이 차이나면 어긋남
 DEFAULT_CAP_S = 300        # 해소를 기다리는 시간 (T0 이후)
 DEFAULT_NO_THRASH_S = 600  # T0를 기다리는 시간 (부하 시작 이후)
 
@@ -159,7 +168,61 @@ def find_run(buckets, start_idx, pred, need):
     return None
 
 
+def psi_onset_resolve(buckets, load_start, limit_ns):
+    """보조 기록용 PSI 기준 (T0, 해소) 시각. 해소는 T0 + limit_ns 안에 있을 때만 센다."""
+    start_idx = next((i for i, b in enumerate(buckets) if b["start_ns"] >= load_start), len(buckets))
+    r = [b["ratio"] for b in buckets]
+    onset = None
+    for i in range(start_idx, len(buckets) - PSI_WINDOW_S + 1):
+        w = r[i:i + PSI_WINDOW_S]
+        if None not in w and sum(w) / PSI_WINDOW_S >= FULL_RATIO:
+            onset = next(k for k in range(i, i + PSI_WINDOW_S) if r[k] >= FULL_RATIO)
+            break
+    if onset is None:
+        return None, None
+    t0 = buckets[onset]["start_ns"]
+    r1 = find_run(buckets, onset, lambda x: x < FULL_RATIO, RESOLVE_RUN_S)
+    resolve = None
+    if r1 is not None and buckets[r1[1]]["end_ns"] <= t0 + limit_ns:
+        resolve = buckets[r1[1]]["end_ns"]
+    return t0, resolve
+
+
 # ---------- 프로브 ----------
+
+def load_ssh(path):
+    """SSH 프로브 (시작 ns, 완료 ns, 성공 여부)를 시작 시각 순으로 읽는다. 쓰다 만 줄은 건너뛴다."""
+    out = []
+    if not os.path.exists(path):
+        return out
+    with open(path, encoding="utf-8") as f:
+        next(f, None)  # 헤더
+        for line in f:
+            p = line.rstrip("\n").split("\t")
+            if len(p) < 3:
+                continue
+            try:
+                start = int(p[0])
+                latency_ms = float(p[1])
+            except ValueError:
+                continue
+            out.append((start, start + int(latency_ms * 1e6), p[2] == "1"))
+    out.sort()
+    return out
+
+
+def find_flag_run(flags, want, need, start=0):
+    """flags[start:]에서 값이 want인 항목이 need개 연속된 첫 위치 (첫 인덱스, 마지막 인덱스)."""
+    run = 0
+    for i in range(start, len(flags)):
+        if flags[i] == want:
+            run += 1
+            if run == need:
+                return i - need + 1, i
+        else:
+            run = 0
+    return None
+
 
 def window_gap(probes, win_start, win_end):
     """창 안의 E 최대 무응답(초)과 성공률. 프로브는 (완료 시각 ns, 성공 여부). 창 밖의 무응답은 자른다."""
@@ -217,7 +280,8 @@ def role_of(name):
 def evaluate(d, now_ns=None, final=False):
     run = load_run(d)
     samples = load_samples(os.path.join(d, "samples.log"))
-    ssh = sv.load_probes(os.path.join(d, "ssh_probe.tsv"))
+    ssh_probes = load_ssh(os.path.join(d, "ssh_probe.tsv"))
+    ssh = [(end, ok) for _, end, ok in ssh_probes]   # 창 계산용: (완료 시각, 성공 여부)
     canary = sv.load_probes(os.path.join(d, "canary_probe.tsv"))
     buckets = build_buckets(samples)
 
@@ -227,28 +291,33 @@ def evaluate(d, now_ns=None, final=False):
     observe_sec = run.get("observe_sec")
     offset_ns = int(run.get("guest_clock_offset_ns") or 0)
 
-    last_seen = max([s["recv_ns"] for s in samples] + [t for t, _ in canary] + [0])
+    last_seen = max([s["recv_ns"] for s in samples] + [t for t, _ in canary] + [t for t, _ in ssh] + [0])
     if now_ns is None:
         now_ns = last_seen
 
     notes = []
     t0 = t_resolve = None
+    psi_t0 = psi_resolve = None
     status = "running"
 
     if load_start is None:
         notes.append("run.json에 load_start_unix_ns가 없어 T0를 계산하지 않았다")
     else:
         load_end = load_start + int(load_sec) * NS if load_sec else None
-        start_idx = next((i for i, b in enumerate(buckets) if b["start_ns"] >= load_start), len(buckets))
-        r0 = find_run(buckets, start_idx, lambda x: x >= FULL_RATIO, T0_RUN_S)
+        seq = [p for p in ssh_probes if p[0] >= load_start]
+        oks = [p[2] for p in seq]
+        r0 = find_flag_run(oks, False, SSH_FAIL_RUN)
+        psi_t0, psi_resolve = psi_onset_resolve(buckets, load_start, cap_ns)
+        if psi_resolve is not None and load_end is not None and psi_resolve > load_end:
+            psi_resolve = None  # 부하의 자체 종료 뒤의 해소는 세지 않는다
         if r0 is not None:
-            t0 = buckets[r0[0]]["start_ns"]
-            r1 = find_run(buckets, r0[0], lambda x: x < FULL_RATIO, RESOLVE_RUN_S)
+            t0 = seq[r0[0]][0]
+            r1 = find_flag_run(oks, True, SSH_OK_RUN, r0[1] + 1)
             win_end_limit = t0 + cap_ns
             if load_end is not None:
                 win_end_limit = min(win_end_limit, load_end)
-            if r1 is not None and buckets[r1[1]]["end_ns"] <= win_end_limit:
-                t_resolve = buckets[r1[1]]["end_ns"]
+            if r1 is not None and seq[r1[1]][1] <= win_end_limit:
+                t_resolve = seq[r1[1]][1]
             if t_resolve is not None:
                 status = "resolved"
             elif load_end is not None and now_ns >= load_end and load_end < t0 + cap_ns:
@@ -318,6 +387,16 @@ def evaluate(d, now_ns=None, final=False):
     def diff(a, b):
         return None if a is None or b is None else round((a - b) / NS, 1)
 
+    # SSH 기준과 PSI 기준(보조)이 어긋나는지
+    psi_disagree = None
+    if load_start is not None:
+        if (t0 is None) != (psi_t0 is None):
+            psi_disagree = True
+        elif t0 is not None:
+            psi_disagree = abs(t0 - psi_t0) > PSI_DISAGREE_S * NS
+        else:
+            psi_disagree = False
+
     # 선행 여부: 해소가 데몬의 종료 때문인지 커널 때문인지 (기록용)
     first_actor = "none"
     if t_kill is not None and (t_oom is None or t_kill < t_oom):
@@ -341,6 +420,11 @@ def evaluate(d, now_ns=None, final=False):
         "full_peak_1s": peak_1s,
         "full_peak_10s_avg": peak_10s,
         "mem_avail_min_mib": avail_min_mib,
+        "psi": {
+            "t0_s": rel(psi_t0), "t_resolve_s": rel(psi_resolve),
+            "resolve_time_s": diff(psi_resolve, psi_t0), "t0_gap_s": diff(psi_t0, t0),
+            "disagree": psi_disagree,
+        },
         "kernel_oom_kills": oom_delta,
         "first_actor": first_actor,
         "daemon_decision_before_kernel": daemon_before_kernel,

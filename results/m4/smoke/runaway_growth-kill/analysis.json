@@ -1,17 +1,28 @@
 {
   "status": "resolved",
-  "t0_s": 156.3,
+  "t0_s": 155.8,
   "t_detect_s": 166.4,
   "t_kill_s": 166.4,
-  "t_resolve_s": 177.4,
+  "t_resolve_s": 170.3,
   "t_oom_s": null,
-  "resolve_time_s": 21.0,
-  "detect_delay_s": 10.1,
-  "kill_to_resolve_s": 10.9,
+  "resolve_time_s": 14.5,
+  "detect_delay_s": 10.6,
+  "kill_to_resolve_s": 3.9,
+  "full_peak_1s": 0.353,
+  "full_peak_10s_avg": 0.207,
+  "mem_avail_min_mib": 0.0,
+  "psi": {
+    "t0_s": 156.3,
+    "t_resolve_s": 177.4,
+    "resolve_time_s": 21.0,
+    "t0_gap_s": 0.5,
+    "disagree": false
+  },
   "kernel_oom_kills": 0,
   "first_actor": "daemon",
   "daemon_decision_before_kernel": true,
   "decision_without_thrash": false,
+  "decision_count": 1,
   "decisions": [
     {
       "t_s": 166.4,
@@ -36,12 +47,12 @@
   "e_canary": {
     "max_gap_s": 1.5,
     "ok_rate": 1.0,
-    "probes": 21
+    "probes": 14
   },
   "e_ssh": {
-    "max_gap_s": 14.0,
-    "ok_rate": 0.545,
-    "probes": 22
+    "max_gap_s": 14.5,
+    "ok_rate": 0.091,
+    "probes": 11
   },
   "samples": 856,
   "buckets": 213,

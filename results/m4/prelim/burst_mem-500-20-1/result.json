@@ -16,35 +16,43 @@
   "guest_clock_offset_ns": 72664866,
   "result": {
     "status": "resolved",
-    "t0_s": 0.5,
+    "t0_s": 1.0,
     "t_detect_s": null,
     "t_kill_s": null,
-    "t_resolve_s": 24.5,
+    "t_resolve_s": 16.3,
     "t_oom_s": null,
-    "resolve_time_s": 24.0,
+    "resolve_time_s": 15.3,
     "detect_delay_s": null,
     "kill_to_resolve_s": null,
     "full_peak_1s": 0.438,
     "full_peak_10s_avg": 0.171,
     "mem_avail_min_mib": 14.9,
+    "psi": {
+      "t0_s": 0.5,
+      "t_resolve_s": 24.5,
+      "resolve_time_s": 24.0,
+      "t0_gap_s": -0.5,
+      "disagree": false
+    },
     "kernel_oom_kills": 0,
     "first_actor": "none",
     "daemon_decision_before_kernel": null,
     "decision_without_thrash": false,
+    "decision_count": 0,
     "decisions": [],
     "protected_seen": [],
     "killed_roles": [],
     "e_alive_at_end": true,
     "e_killed": false,
     "e_canary": {
-      "max_gap_s": 3.0,
-      "ok_rate": 0.875,
-      "probes": 24
+      "max_gap_s": 2.8,
+      "ok_rate": 0.8,
+      "probes": 15
     },
     "e_ssh": {
-      "max_gap_s": 15.8,
-      "ok_rate": 0.542,
-      "probes": 24
+      "max_gap_s": 15.3,
+      "ok_rate": 0.083,
+      "probes": 12
     },
     "samples": 240,
     "buckets": 59,

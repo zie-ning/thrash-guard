@@ -73,7 +73,7 @@ VM 검증(2026-11-13, 원본 `results/m3/20261113/`): 서비스 기동, 컨테�
 
 - 컨테이너 런타임별 실제 cgroup 이름(기본 `target_match`는 임시)
 - PSI 트리거 등록 실패 시 동작(제안: 시작 거부)
-- M4 본 실행 전 점검: T0 기준(메모리 `full` 10%, 3초 연속)이 io가 지배하는 정지를 늦게 잡는 문제, 샘플러의 io PSI 기록 여부([validation/overview.md](validation/overview.md) 6절)
+- M4 본 실행에서 재확인: T0·해소를 SSH 프로브 기준(3번 연속 실패, 5번 연속 성공)으로 바꿨고 이 연속 횟수는 예비 실행 10개를 보고 정한 임시값이다([validation/measurement.md](validation/measurement.md) 1절)
 - 공개 시점의 라이선스(oomd가 GPL-2.0이므로 코드는 가져오지 않는다)
 
 ## 작업 규칙

@@ -15,18 +15,25 @@
   "load_start_unix_ns": 1794575954478134311,
   "guest_clock_offset_ns": 12800975,
   "result": {
-    "status": "resolved",
-    "t0_s": 5.9,
+    "status": "incomplete",
+    "t0_s": null,
     "t_detect_s": null,
     "t_kill_s": null,
-    "t_resolve_s": 19.8,
+    "t_resolve_s": null,
     "t_oom_s": null,
-    "resolve_time_s": 13.9,
+    "resolve_time_s": null,
     "detect_delay_s": null,
     "kill_to_resolve_s": null,
     "full_peak_1s": 0.325,
     "full_peak_10s_avg": 0.08,
     "mem_avail_min_mib": 15.2,
+    "psi": {
+      "t0_s": null,
+      "t_resolve_s": null,
+      "resolve_time_s": null,
+      "t0_gap_s": null,
+      "disagree": false
+    },
     "kernel_oom_kills": 0,
     "first_actor": "none",
     "daemon_decision_before_kernel": null,
@@ -38,14 +45,14 @@
     "e_alive_at_end": true,
     "e_killed": false,
     "e_canary": {
-      "max_gap_s": 1.0,
+      "max_gap_s": 1.1,
       "ok_rate": 1.0,
-      "probes": 14
+      "probes": 30
     },
     "e_ssh": {
-      "max_gap_s": 3.7,
+      "max_gap_s": 4.0,
       "ok_rate": 1.0,
-      "probes": 14
+      "probes": 30
     },
     "samples": 227,
     "buckets": 56,
