@@ -1,0 +1,71 @@
+Started thrash-guard: terminate a culprit cgroup under memory thrashing.
+thrash-guard 유효 설정:
+  모드: dry-run (종료하지 않음)
+  target_parent=/sys/fs/cgroup/system.slice
+  target_match=tg-load.service,tg-canary.service
+  trigger: full 150000/1000000 us
+  판단: 최근 10초 평균 full >= 10% (샘플 250 ms, 40칸)
+  io 경로: 평균 io full >= 50% 이고 가용 메모리 <= 5% (0이면 끔)
+  안전장치: grace 30초, cooldown 60초, 시간당 최대 3회
+  로그: 표준 오류 (링버퍼 16 KiB)
+  자기 보호: mlock=yes, oom_score_adj=-1000
+2026-11-13T13:09:19.373Z warn no cgroup under target_parent matches target_match, nothing will be terminated
+2026-11-13T13:09:19.374Z info start mode=dry-run
+2026-11-13T13:09:48.588Z info trigger watch start
+2026-11-13T13:09:58.589Z info judge skip reason=no_candidate sys_avg_x100=1986 io_avg_x100=9128 avail_x100=0
+2026-11-13T13:10:15.839Z warn judge kill cand=tg-load.service dry_run=1 result=0 path=io sys_avg_x100=739 io_avg_x100=9743 avail_x100=0 max_bytes=592007168 growth_bytes=290816 growing=0
+2026-11-13T13:10:15.839Z info judge cand name=tg-canary.service max_bytes=4952064 growth_bytes=385024 ready=1 eligible=0 growing=0 grace=0 protected=1
+2026-11-13T13:10:15.839Z info judge cand name=tg-load.service max_bytes=592007168 growth_bytes=290816 ready=1 eligible=1 growing=0 grace=0 protected=0
+2026-11-13T13:10:16.252Z info trigger watch start
+2026-11-13T13:10:26.254Z info judge skip reason=cooldown sys_avg_x100=2839 io_avg_x100=9734 avail_x100=0
+2026-11-13T13:10:27.503Z info judge skip reason=no_candidate sys_avg_x100=3109 io_avg_x100=9736 avail_x100=0
+2026-11-13T13:10:28.753Z info judge skip reason=cooldown sys_avg_x100=3143 io_avg_x100=9737 avail_x100=0
+2026-11-13T13:10:30.003Z info judge skip reason=no_candidate sys_avg_x100=3448 io_avg_x100=9739 avail_x100=0
+2026-11-13T13:10:30.253Z info judge skip reason=cooldown sys_avg_x100=3315 io_avg_x100=9743 avail_x100=0
+2026-11-13T13:10:30.503Z info judge skip reason=no_candidate sys_avg_x100=3235 io_avg_x100=9743 avail_x100=0
+2026-11-13T13:10:31.253Z info judge skip reason=cooldown sys_avg_x100=2861 io_avg_x100=9743 avail_x100=0
+2026-11-13T13:10:36.503Z info judge skip reason=no_candidate sys_avg_x100=1069 io_avg_x100=9739 avail_x100=0
+2026-11-13T13:10:36.753Z info judge skip reason=cooldown sys_avg_x100=1019 io_avg_x100=9734 avail_x100=0
+2026-11-13T13:10:37.253Z info judge skip reason=no_candidate sys_avg_x100=904 io_avg_x100=9733 avail_x100=0
+2026-11-13T13:10:39.003Z info judge skip reason=cooldown sys_avg_x100=937 io_avg_x100=9734 avail_x100=0
+2026-11-13T13:10:39.753Z info judge skip reason=no_candidate sys_avg_x100=996 io_avg_x100=9719 avail_x100=0
+2026-11-13T13:10:40.503Z info judge skip reason=cooldown sys_avg_x100=885 io_avg_x100=9699 avail_x100=0
+2026-11-13T13:10:40.753Z info judge skip reason=no_candidate sys_avg_x100=891 io_avg_x100=9694 avail_x100=0
+2026-11-13T13:10:41.253Z info judge skip reason=cooldown sys_avg_x100=896 io_avg_x100=9689 avail_x100=0
+2026-11-13T13:10:41.503Z info judge skip reason=no_candidate sys_avg_x100=899 io_avg_x100=9686 avail_x100=0
+2026-11-13T13:10:42.753Z info judge skip reason=cooldown sys_avg_x100=915 io_avg_x100=9672 avail_x100=0
+2026-11-13T13:10:46.003Z info judge skip reason=no_candidate sys_avg_x100=1162 io_avg_x100=9588 avail_x100=0
+2026-11-13T13:10:47.504Z info judge skip reason=cooldown sys_avg_x100=1052 io_avg_x100=9584 avail_x100=0
+2026-11-13T13:10:48.753Z info judge skip reason=no_candidate sys_avg_x100=1247 io_avg_x100=9586 avail_x100=0
+2026-11-13T13:10:49.753Z info judge skip reason=cooldown sys_avg_x100=1203 io_avg_x100=9561 avail_x100=0
+2026-11-13T13:10:50.253Z info judge skip reason=no_candidate sys_avg_x100=1329 io_avg_x100=9571 avail_x100=0
+2026-11-13T13:10:50.503Z info judge skip reason=cooldown sys_avg_x100=1321 io_avg_x100=9580 avail_x100=0
+2026-11-13T13:10:51.003Z info judge skip reason=no_candidate sys_avg_x100=1311 io_avg_x100=9590 avail_x100=0
+2026-11-13T13:10:51.753Z info judge skip reason=cooldown sys_avg_x100=1303 io_avg_x100=9597 avail_x100=0
+2026-11-13T13:10:52.003Z info judge skip reason=no_candidate sys_avg_x100=1311 io_avg_x100=9589 avail_x100=0
+2026-11-13T13:10:52.253Z info judge skip reason=cooldown sys_avg_x100=1313 io_avg_x100=9586 avail_x100=0
+2026-11-13T13:10:53.503Z info judge skip reason=no_candidate sys_avg_x100=1434 io_avg_x100=9602 avail_x100=0
+2026-11-13T13:10:55.003Z info judge skip reason=cooldown sys_avg_x100=1399 io_avg_x100=9646 avail_x100=0
+2026-11-13T13:10:55.503Z info judge skip reason=no_candidate sys_avg_x100=1232 io_avg_x100=9664 avail_x100=0
+2026-11-13T13:10:56.004Z info judge skip reason=cooldown sys_avg_x100=1310 io_avg_x100=9682 avail_x100=0
+2026-11-13T13:10:56.253Z info judge skip reason=no_candidate sys_avg_x100=1297 io_avg_x100=9695 avail_x100=0
+2026-11-13T13:10:56.753Z info judge skip reason=cooldown sys_avg_x100=1388 io_avg_x100=9694 avail_x100=0
+2026-11-13T13:10:57.753Z info judge skip reason=no_candidate sys_avg_x100=1502 io_avg_x100=9660 avail_x100=0
+2026-11-13T13:10:58.503Z info judge skip reason=cooldown sys_avg_x100=1493 io_avg_x100=9649 avail_x100=0
+2026-11-13T13:11:00.753Z info judge skip reason=no_candidate sys_avg_x100=1353 io_avg_x100=9684 avail_x100=0
+2026-11-13T13:11:02.003Z info judge skip reason=cooldown sys_avg_x100=1645 io_avg_x100=9678 avail_x100=0
+2026-11-13T13:11:04.503Z info judge skip reason=no_candidate sys_avg_x100=1410 io_avg_x100=9672 avail_x100=0
+2026-11-13T13:11:05.253Z info judge skip reason=cooldown sys_avg_x100=1464 io_avg_x100=9656 avail_x100=0
+2026-11-13T13:11:08.003Z info judge skip reason=no_candidate sys_avg_x100=1405 io_avg_x100=9659 avail_x100=0
+2026-11-13T13:11:09.004Z info judge skip reason=cooldown sys_avg_x100=1584 io_avg_x100=9663 avail_x100=0
+2026-11-13T13:11:10.253Z info judge skip reason=no_candidate sys_avg_x100=1597 io_avg_x100=9650 avail_x100=0
+2026-11-13T13:11:10.503Z info judge skip reason=cooldown sys_avg_x100=1597 io_avg_x100=9651 avail_x100=0
+2026-11-13T13:11:13.003Z info judge skip reason=no_candidate sys_avg_x100=1611 io_avg_x100=9644 avail_x100=0
+2026-11-13T13:11:15.003Z info judge skip reason=cooldown sys_avg_x100=1673 io_avg_x100=9646 avail_x100=0
+2026-11-13T13:11:16.003Z info judge skip reason=no_candidate sys_avg_x100=1588 io_avg_x100=9647 avail_x100=0
+2026-11-13T13:11:16.253Z warn judge kill cand=tg-load.service dry_run=1 result=0 path=mem sys_avg_x100=1606 io_avg_x100=9645 avail_x100=0 max_bytes=594075648 growth_bytes=233472 growing=0
+2026-11-13T13:11:16.253Z info judge cand name=tg-canary.service max_bytes=4722688 growth_bytes=94208 ready=1 eligible=0 growing=0 grace=0 protected=1
+2026-11-13T13:11:16.253Z info judge cand name=tg-load.service max_bytes=594075648 growth_bytes=233472 ready=1 eligible=1 growing=0 grace=0 protected=0
+2026-11-13T13:11:16.260Z info trigger watch start
+2026-11-13T13:11:26.262Z info judge skip reason=mem_available sys_avg_x100=191 io_avg_x100=6878 avail_x100=6167
+2026-11-13T13:11:31.261Z info judge calm sys_avg_x100=33 io_avg_x100=2435

@@ -1,0 +1,10 @@
+active
+Result=success
+Id=tg-canary.service
+ActiveState=active
+SubState=running
+
+Result=success
+Id=tg-load.service
+ActiveState=inactive
+SubState=dead

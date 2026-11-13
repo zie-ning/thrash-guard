@@ -1,0 +1,1 @@
+tg-load mode=burst t_s=2 state=alloc resident_mib=529 cycles=0 last_alloc_ms=0

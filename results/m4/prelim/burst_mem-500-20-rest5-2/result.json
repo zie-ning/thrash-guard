@@ -1,0 +1,56 @@
+{
+  "id": "prelim-burst-500-20-r5-2",
+  "load": "burst_mem",
+  "load_args": "burst --size-mib 500 --hold 20 --rest 5",
+  "daemon": "dry",
+  "cap_sec": 300,
+  "load_sec": 600,
+  "observe_sec": 600,
+  "baseline_sec": 15,
+  "pin_mib": 43,
+  "io_limit": {
+    "iops": 3000,
+    "bytes_per_sec": 10900000
+  },
+  "load_start_unix_ns": 1794575954478134311,
+  "guest_clock_offset_ns": 12800975,
+  "result": {
+    "status": "resolved",
+    "t0_s": 5.9,
+    "t_detect_s": null,
+    "t_kill_s": null,
+    "t_resolve_s": 19.8,
+    "t_oom_s": null,
+    "resolve_time_s": 13.9,
+    "detect_delay_s": null,
+    "kill_to_resolve_s": null,
+    "full_peak_1s": 0.325,
+    "full_peak_10s_avg": 0.08,
+    "mem_avail_min_mib": 15.2,
+    "kernel_oom_kills": 0,
+    "first_actor": "none",
+    "daemon_decision_before_kernel": null,
+    "decision_without_thrash": false,
+    "decision_count": 0,
+    "decisions": [],
+    "protected_seen": [],
+    "killed_roles": [],
+    "e_alive_at_end": true,
+    "e_killed": false,
+    "e_canary": {
+      "max_gap_s": 1.0,
+      "ok_rate": 1.0,
+      "probes": 14
+    },
+    "e_ssh": {
+      "max_gap_s": 3.7,
+      "ok_rate": 1.0,
+      "probes": 14
+    },
+    "samples": 227,
+    "buckets": 56,
+    "invalid_buckets": 0,
+    "daemon_log": true,
+    "notes": []
+  }
+}

@@ -1,0 +1,10 @@
+active
+Result=success
+Id=tg-canary.service
+ActiveState=active
+SubState=running
+
+Result=oom-kill
+Id=tg-load.service
+ActiveState=failed
+SubState=failed
