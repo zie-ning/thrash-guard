@@ -47,11 +47,16 @@ run_one() {
     # 설정 파일 끝에 mlock과 log_path를 덧붙인다(뒤의 값이 앞의 값을 덮어쓰는지는 아래에서 시작 로그로 확인한다).
     T=90 q "sudo install -m0755 /tmp/thrash-guard /usr/local/sbin/ && sudo install -D -m0644 /tmp/thrash-guard.conf /etc/thrash-guard/thrash-guard.conf && printf 'mlock = $MLOCK\nlog_path = /dev/shm/tg.log\n' | sudo tee -a /etc/thrash-guard/thrash-guard.conf >/dev/null && sudo install -m0644 /tmp/thrash-guard.service /etc/systemd/system/thrash-guard.service && sudo systemctl daemon-reload && mkdir -p /tmp/img && cp /tmp/tg-load /tmp/img/ && tar -C /tmp/img -c tg-load | sudo docker import - tgload >/dev/null && sudo systemctl start thrash-guard; sleep 2; systemctl is-active thrash-guard; grep ExecStart /etc/systemd/system/thrash-guard.service" | tee -a "$OUT"
 
-    # 적용 확인: 데몬의 VmLck. mlock=true는 0보다 크고 false는 0이어야 한다.
+    # 준비가 실패했으면 부하를 걸기 전에 이 회를 중단한다.
+    T=15 q "systemctl is-active --quiet thrash-guard" || { say "데몬이 활성 상태가 아니다. 이 회를 중단한다."; return 1; }
+
+    # 적용 확인: 데몬의 VmLck. mlock=yes는 0보다 크고 no는 0이어야 한다.
     local DPID VMLCK
     DPID=$(T=15 q "systemctl show -p MainPID --value thrash-guard" | tr -d '[:space:]')
     VMLCK=$(T=15 q "awk '/VmLck/{print \$2}' /proc/$DPID/status" | tr -d '[:space:]')
     say "데몬 PID=$DPID VmLck=${VMLCK}kB (arm=$ARM)"
+    case "$DPID" in ''|0|*[!0-9]*) say "데몬 PID를 얻지 못했다. 이 회를 중단한다."; return 1 ;; esac
+    case "$VMLCK" in ''|*[!0-9]*) say "VmLck를 읽지 못했다. 이 회를 중단한다."; return 1 ;; esac
     if { [ "$ARM" = mlock ] && [ "${VMLCK:-0}" -eq 0 ]; } || { [ "$ARM" = nomlock ] && [ "${VMLCK:-1}" -ne 0 ]; }; then
         say "경고: mlock 설정이 적용되지 않았다. 이 회는 결과에서 제외한다."
     fi
@@ -79,8 +84,12 @@ run_one() {
 
     say "==== 결과 수집"
     T=60 q 'echo "--- oom/dmesg"; sudo dmesg | grep -a -i -E "out of memory|oom-kill|Killed process" | tail -5; echo "--- daemon status"; grep -E "VmRSS|VmLck" /proc/'"$DPID"'/status; sudo systemctl stop thrash-guard; echo "--- stats"; sudo grep -a stats /dev/shm/tg.log' | tee -a "$OUT"
-    T=90 q "sudo cat /dev/shm/psi.tsv" > "$OUT.psi"
-    T=90 q "sudo cat /dev/shm/tg.log" > "$OUT.daemonlog"
+    # 수집은 표준 출력만 임시 파일에 받고, 성공했을 때만 결과 파일로 확정한다(오류 문구가 측정 데이터에 섞이지 않게).
+    local f
+    for f in psi.tsv tg.log; do
+        timeout 90 ssh "${SSH_OPTS[@]}" -o ConnectTimeout=10 "$VM_USER@127.0.0.1" "sudo cat /dev/shm/$f" > "$OUT.tmp" 2>/dev/null             && [ -s "$OUT.tmp" ] || { say "수집 실패: $f. 이 회를 실패로 처리한다."; rm -f "$OUT.tmp"; return 1; }
+        mv "$OUT.tmp" "$OUT.$([ "$f" = psi.tsv ] && echo psi || echo daemonlog)"
+    done
     say "psi 기록 $(wc -l < "$OUT.psi")줄, 데몬 로그 $(wc -l < "$OUT.daemonlog")줄, 완료"
 }
 
