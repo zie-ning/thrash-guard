@@ -1,2 +1,0 @@
-tg-load mode=anon t_s=1 alloc_mib=589 touches=150784 max_batch_ms=1035
-tg-load mode=anon t_s=2 alloc_mib=590 touches=256 max_batch_ms=1

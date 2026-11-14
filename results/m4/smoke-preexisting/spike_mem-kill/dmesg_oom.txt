@@ -1,3 +1,0 @@
-[   94.563921] sshd invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=-1000
-[   94.564131] oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=ssh.service,mems_allowed=0,global_oom,task_memcg=/system.slice/tg-load.service,task=tg-load,pid=1488,uid=0
-[   94.564147] Out of memory: Killed process 1488 (tg-load) total-vm:667672kB, anon-rss:581504kB, file-rss:0kB, shmem-rss:0kB, UID:0 pgtables:1172kB oom_score_adj:0

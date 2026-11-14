@@ -1,3 +1,0 @@
-[   84.884732] tg-load invoked oom-killer: gfp_mask=0x140dca(GFP_HIGHUSER_MOVABLE|__GFP_COMP|__GFP_ZERO), order=0, oom_score_adj=0
-[   84.884923] oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=tg-load.service,mems_allowed=0,global_oom,task_memcg=/system.slice/tg-load.service,task=tg-load,pid=1488,uid=0
-[   84.884934] Out of memory: Killed process 1488 (tg-load) total-vm:667672kB, anon-rss:540544kB, file-rss:0kB, shmem-rss:0kB, UID:0 pgtables:1092kB oom_score_adj:0
