@@ -24,6 +24,7 @@ Thrash Guard의 문서 색인이다. 처음 읽는다면 **plan, design, validat
 |---|---|
 | [validation/overview.md](validation/overview.md) | 효과 검증 설계: 구성 요소, 조건, 합격 기준, 위험 |
 | [validation/measurement.md](validation/measurement.md) | 측정 정의와 규칙 |
+| [validation/mlock-control.md](validation/mlock-control.md) | 데몬 `mlockall` 대조군 실험 계획(이슈 #6) |
 
 ## 환경과 기록
 
