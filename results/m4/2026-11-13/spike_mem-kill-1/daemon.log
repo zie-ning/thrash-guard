@@ -1,0 +1,18 @@
+Started thrash-guard: terminate a culprit cgroup under memory thrashing.
+thrash-guard 유효 설정:
+  모드: 실제 종료
+  target_parent=/sys/fs/cgroup/system.slice
+  target_match=tg-load.service,tg-canary.service
+  trigger: full 150000/1000000 us
+  판단: 최근 10초 평균 full >= 10% (샘플 250 ms, 40칸)
+  io 경로: 평균 io full >= 50% 이고 가용 메모리 <= 5% (0이면 끔)
+  안전장치: grace 30초, cooldown 60초, 시간당 최대 3회
+  로그: 표준 오류 (링버퍼 16 KiB)
+  자기 보호: mlock=yes, oom_score_adj=-1000
+2026-11-14T00:41:04.452Z info start mode=kill
+2026-11-14T00:41:23.700Z info trigger watch start
+2026-11-14T00:41:33.701Z warn judge kill cand=tg-load.service dry_run=0 result=0 path=io sys_avg_x100=328 io_avg_x100=9149 avail_x100=0 max_bytes=571916288 growth_bytes=571121664 growing=1
+2026-11-14T00:41:33.701Z info judge cand name=tg-canary.service max_bytes=4694016 growth_bytes=372736 ready=1 eligible=0 growing=0 grace=1 protected=1
+2026-11-14T00:41:33.701Z info judge cand name=tg-load.service max_bytes=571916288 growth_bytes=571121664 ready=1 eligible=1 growing=1 grace=0 protected=0
+2026-11-14T00:41:36.492Z info trigger watch start
+2026-11-14T00:41:46.993Z info judge calm sys_avg_x100=12 io_avg_x100=2419

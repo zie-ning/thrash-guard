@@ -25,6 +25,7 @@
 #   --burst-rest N     해제 후 쉬는 시간 (기본 10)
 #
 # 기본값은 예비 실행으로 맞춘 값이다(docs/validation/overview.md 4절). 실행 조건은 모두 run.json에 남는다.
+# spike_mem은 부하 서비스를 데몬 시작 전에 대기 상태로 만들어 두고 기준 구간 뒤에 급증시킨다(run.json load_preexisting).
 # burst_mem(폭주형 반복 할당·해제)은 폭주로 맞추지 못해 뺐다.
 # normal_burst는 T0나 해소와 무관하게 관찰 시간(--observe-sec) 전체를 본다. 데몬이 후보를 고르기까지
 # 유예(기본 30초)가 있어, 첫 사이클에서 끝내면 오탐 여부를 알 수 없기 때문이다.
@@ -156,6 +157,20 @@ clock_offset_ns() {
 CLOCK_OFFSET_START_NS="$(clock_offset_ns)"
 log "VM 시계 차이(guest - host): $((CLOCK_OFFSET_START_NS / 1000000)) ms"
 
+# spike_mem은 데몬이 뜨기 전에 서비스(tg-load)를 미리 만들어 두고 신호 파일(/tmp/tg-go)이 생기면 급증한다.
+# 실제 장애처럼 "이미 떠 있던 프로세스가 갑자기 커지는" 조건이다. 데몬 시작 때 있던 cgroup은 시작 직후
+# 유예(30초)를 받지 않는다. 새로 시작한 서비스로 급증시키면 유예가 해소 시간을 지배해 비교가 되지 않는다.
+LOAD_PREEXISTING=false
+if [ "$LOAD" = spike_mem ]; then
+    LOAD_PREEXISTING=true
+    vm_run 30 "sudo systemd-run -q --unit=tg-load \
+            -p StandardOutput=file:/tmp/tg-load.out -p StandardError=file:/tmp/tg-load.out \
+            /bin/sh -c 'while [ ! -e /tmp/tg-go ]; do sleep 0.2; done; exec /tmp/tg-load $LOAD_ARGS --duration $LOAD_SEC'"
+    sleep 1
+    vm_run 30 'systemctl is-active tg-load >/dev/null' \
+        || { echo "대기 중인 부하(tg-load)가 시작되지 않았다" >&2; exit 1; }
+fi
+
 # 데몬. 종료 후보는 부하(tg-load)와 E(tg-canary) 두 서비스뿐이다. E는 보호되어 후보에서 빠진다.
 if [ "$DAEMON" != none ]; then
     flag="--dry-run"
@@ -202,9 +217,13 @@ sleep "$BASELINE_SEC"
 
 LOAD_START_NS="$(date +%s%N)"
 log "부하 시작: $LOAD"
-vm_run 30 "sudo systemd-run -q --unit=tg-load \
-        -p StandardOutput=file:/tmp/tg-load.out -p StandardError=file:/tmp/tg-load.out \
-        /tmp/tg-load $LOAD_ARGS --duration $LOAD_SEC"
+if [ "$LOAD_PREEXISTING" = true ]; then
+    vm_run 30 'sudo touch /tmp/tg-go'
+else
+    vm_run 30 "sudo systemd-run -q --unit=tg-load \
+            -p StandardOutput=file:/tmp/tg-load.out -p StandardError=file:/tmp/tg-load.out \
+            /tmp/tg-load $LOAD_ARGS --duration $LOAD_SEC"
+fi
 sleep 2
 # 부하가 실제로 걸리지 않았는데 결과가 "스래싱 미발생"으로 기록되는 일을 막는다.
 # 큰 덩어리를 즉시 할당하는 부하는 시작 직후에 VM을 멈춰 이 확인이 시간 초과될 수 있다.
@@ -213,6 +232,16 @@ load_state="$(vm_run 15 'systemctl is-active tg-load' 2>/dev/null || true)"
 case "$load_state" in
     active|activating) ;;
     "") log "부하 시작 직후 VM이 응답하지 않아 시작 여부를 확인하지 못했다(부하가 바로 VM을 멈춘 것일 수 있다). 계속한다" ;;
+    failed)
+        # 신호 파일을 만든 직후 데몬이나 커널이 서비스를 이미 종료했을 수 있다. 시작 실패와 구분되지 않으므로
+        # 계속 진행하고, 시작 실패였다면 결과(no_thrash, load.out)에서 드러난다.
+        if [ "$LOAD_PREEXISTING" = true ]; then
+            log "부하가 곧바로 종료되어 failed 상태다(데몬 또는 커널 종료일 수 있다). 계속한다"
+        else
+            echo "부하(tg-load)가 시작되지 않았다 (상태: $load_state)" >&2
+            vm_run 30 'cat /tmp/tg-load.out' >&2 || true
+            exit 1
+        fi ;;
     *) echo "부하(tg-load)가 시작되지 않았다 (상태: $load_state)" >&2
        vm_run 30 'cat /tmp/tg-load.out' >&2 || true
        exit 1 ;;
@@ -221,13 +250,14 @@ esac
 # 실행 조건 기록. 계산 결과는 끝난 뒤 result.json에 합친다.
 RUN_ID="$ID" LOAD="$LOAD" LOAD_ARGS="$LOAD_ARGS" DAEMON="$DAEMON" CAP_SEC="$CAP_SEC" LOAD_SEC="$LOAD_SEC" \
 OBSERVE_SEC="$OBSERVE_SEC" BASELINE_SEC="$BASELINE_SEC" PIN_MIB="$PIN_MIB" \
-IO_IOPS="$VM_IOPS" IO_BPS="$VM_BPS" LOAD_START_NS="$LOAD_START_NS" OFFSET_NS="$CLOCK_OFFSET_START_NS" \
+LOAD_PREEXISTING="$LOAD_PREEXISTING" IO_IOPS="$VM_IOPS" IO_BPS="$VM_BPS" LOAD_START_NS="$LOAD_START_NS" OFFSET_NS="$CLOCK_OFFSET_START_NS" \
 python3 - "$OUT/run.json" <<'EOF'
 import json, os, sys
 e = os.environ
 json.dump({
     "id": e["RUN_ID"], "load": e["LOAD"], "load_args": e["LOAD_ARGS"], "daemon": e["DAEMON"],
     "cap_sec": int(e["CAP_SEC"]), "load_sec": int(e["LOAD_SEC"]), "observe_sec": int(e["OBSERVE_SEC"]),
+    "load_preexisting": e["LOAD_PREEXISTING"] == "true",
     "baseline_sec": int(e["BASELINE_SEC"]), "pin_mib": int(e["PIN_MIB"]),
     "io_limit": {"iops": int(e["IO_IOPS"]), "bytes_per_sec": int(e["IO_BPS"])},
     "load_start_unix_ns": int(e["LOAD_START_NS"]), "guest_clock_offset_ns": int(e["OFFSET_NS"]),

@@ -1,0 +1,287 @@
+{
+  "root": "results/m4/2026-11-13",
+  "runs": 15,
+  "cap_s": 300,
+  "judgments": {
+    "resolve": {
+      "runaway_growth": {
+        "load": "runaway_growth",
+        "dry_values": [
+          "inf",
+          20.2,
+          "inf"
+        ],
+        "kill_values": [
+          18.2,
+          19.2,
+          23.2
+        ],
+        "limit_s": 60,
+        "dry_median": "inf",
+        "kill_median": 19.2,
+        "kill_worst": 23.2,
+        "verdict": "합격",
+        "reason": "켜짐 중앙값 19.2초 / dry-run 중앙값 미해소, 켜짐 최악 23.2초"
+      },
+      "spike_mem": {
+        "load": "spike_mem",
+        "dry_values": [
+          17.3,
+          7.7,
+          13.5
+        ],
+        "kill_values": [
+          7.3,
+          10.2,
+          12.7
+        ],
+        "limit_s": 60,
+        "dry_median": 13.5,
+        "kill_median": 10.2,
+        "kill_worst": 12.7,
+        "verdict": "합격",
+        "reason": "켜짐 중앙값 10.2초 / dry-run 중앙값 13.5초, 켜짐 최악 12.7초"
+      }
+    },
+    "e_survival": {
+      "runs": 6,
+      "verdict": "합격",
+      "reason": "켜짐 6회 모두 E가 종료되지 않고 active"
+    },
+    "normal_burst": {
+      "runs": 3,
+      "verdict": "합격",
+      "reason": "3회 모두 종료 결정 0건"
+    }
+  },
+  "groups": {
+    "normal_burst-dry": {
+      "n": 3,
+      "ids": [
+        "normal_burst-dry-1",
+        "normal_burst-dry-2",
+        "normal_burst-dry-3"
+      ],
+      "status": {
+        "no_thrash": 3
+      },
+      "resolve_values": [],
+      "resolve_median": null,
+      "t0_median": null,
+      "t0_seen": 0,
+      "detect_delay_median": null,
+      "kill_to_resolve_median": null,
+      "canary_gap_values": [
+        1.4,
+        1.0,
+        1.2
+      ],
+      "canary_gap_median": 1.2,
+      "canary_ok_median": 1.0,
+      "ssh_gap_values": [
+        4.1,
+        2.0,
+        4.5
+      ],
+      "ssh_gap_median": 4.1,
+      "first_actor": {
+        "none": 3
+      },
+      "kernel_oom_runs": 0,
+      "decision_count": 0,
+      "killed_roles": []
+    },
+    "runaway_growth-dry": {
+      "n": 3,
+      "ids": [
+        "runaway_growth-dry-1",
+        "runaway_growth-dry-2",
+        "runaway_growth-dry-3"
+      ],
+      "status": {
+        "unresolved": 2,
+        "resolved": 1
+      },
+      "resolve_values": [
+        "inf",
+        20.2,
+        "inf"
+      ],
+      "resolve_median": "inf",
+      "t0_median": 156.8,
+      "t0_seen": 3,
+      "detect_delay_median": 11.2,
+      "kill_to_resolve_median": null,
+      "canary_gap_values": [
+        67.7,
+        2.2,
+        7.1
+      ],
+      "canary_gap_median": 7.1,
+      "canary_ok_median": 0.733,
+      "ssh_gap_values": [
+        300.0,
+        17.7,
+        300.0
+      ],
+      "ssh_gap_median": 300.0,
+      "first_actor": {
+        "kernel": 2,
+        "none": 1
+      },
+      "kernel_oom_runs": 2,
+      "decision_count": 7,
+      "killed_roles": []
+    },
+    "runaway_growth-kill": {
+      "n": 3,
+      "ids": [
+        "runaway_growth-kill-1",
+        "runaway_growth-kill-2",
+        "runaway_growth-kill-3"
+      ],
+      "status": {
+        "resolved": 3
+      },
+      "resolve_values": [
+        18.2,
+        19.2,
+        23.2
+      ],
+      "resolve_median": 19.2,
+      "t0_median": 160.9,
+      "t0_seen": 3,
+      "detect_delay_median": 11.4,
+      "kill_to_resolve_median": 7.4,
+      "canary_gap_values": [
+        1.6,
+        2.3,
+        1.6
+      ],
+      "canary_gap_median": 1.6,
+      "canary_ok_median": 1.0,
+      "ssh_gap_values": [
+        14.1,
+        16.2,
+        19.7
+      ],
+      "ssh_gap_median": 16.2,
+      "first_actor": {
+        "daemon": 3
+      },
+      "kernel_oom_runs": 0,
+      "decision_count": 3,
+      "killed_roles": [
+        "load"
+      ]
+    },
+    "spike_mem-dry": {
+      "n": 3,
+      "ids": [
+        "spike_mem-dry-1",
+        "spike_mem-dry-2",
+        "spike_mem-dry-3"
+      ],
+      "status": {
+        "resolved": 3
+      },
+      "resolve_values": [
+        17.3,
+        7.7,
+        13.5
+      ],
+      "resolve_median": 13.5,
+      "t0_median": 1.6,
+      "t0_seen": 3,
+      "detect_delay_median": 1.4,
+      "kill_to_resolve_median": null,
+      "canary_gap_values": [
+        5.2,
+        2.3,
+        3.4
+      ],
+      "canary_gap_median": 3.4,
+      "canary_ok_median": 0.643,
+      "ssh_gap_values": [
+        14.2,
+        7.7,
+        13.5
+      ],
+      "ssh_gap_median": 13.5,
+      "first_actor": {
+        "kernel": 3
+      },
+      "kernel_oom_runs": 3,
+      "decision_count": 1,
+      "killed_roles": []
+    },
+    "spike_mem-kill": {
+      "n": 3,
+      "ids": [
+        "spike_mem-kill-1",
+        "spike_mem-kill-2",
+        "spike_mem-kill-3"
+      ],
+      "status": {
+        "resolved": 3
+      },
+      "resolve_values": [
+        7.3,
+        10.2,
+        12.7
+      ],
+      "resolve_median": 10.2,
+      "t0_median": 3.5,
+      "t0_seen": 3,
+      "detect_delay_median": 4.1,
+      "kill_to_resolve_median": 6.1,
+      "canary_gap_values": [
+        2.4,
+        3.3,
+        4.1
+      ],
+      "canary_gap_median": 3.3,
+      "canary_ok_median": 0.643,
+      "ssh_gap_values": [
+        7.2,
+        10.1,
+        12.7
+      ],
+      "ssh_gap_median": 10.1,
+      "first_actor": {
+        "daemon": 3
+      },
+      "kernel_oom_runs": 0,
+      "decision_count": 3,
+      "killed_roles": [
+        "load"
+      ]
+    }
+  },
+  "warnings": [
+    {
+      "run": "normal_burst-dry-1",
+      "message": "SSH 기준과 PSI 보조 기록의 T0가 어긋난다"
+    },
+    {
+      "run": "normal_burst-dry-3",
+      "message": "SSH 기준과 PSI 보조 기록의 T0가 어긋난다"
+    },
+    {
+      "run": "runaway_growth-dry-1",
+      "message": "샘플 누락으로 무효인 1초 구간이 1개 있다"
+    },
+    {
+      "run": "spike_mem-dry-2",
+      "message": "SSH 기준과 PSI 보조 기록의 T0가 어긋난다"
+    },
+    {
+      "run": "spike_mem-dry-3",
+      "message": "SSH 기준과 PSI 보조 기록의 T0가 어긋난다"
+    },
+    {
+      "run": "spike_mem-kill-1",
+      "message": "SSH 기준과 PSI 보조 기록의 T0가 어긋난다"
+    }
+  ]
+}

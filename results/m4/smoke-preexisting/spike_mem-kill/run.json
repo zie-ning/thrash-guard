@@ -1,0 +1,18 @@
+{
+  "id": "spike_mem-kill-smoke",
+  "load": "spike_mem",
+  "load_args": "anon --size-mib 650 --rate-mib 0",
+  "daemon": "kill",
+  "cap_sec": 300,
+  "load_sec": 600,
+  "observe_sec": 600,
+  "load_preexisting": true,
+  "baseline_sec": 15,
+  "pin_mib": 43,
+  "io_limit": {
+    "iops": 3000,
+    "bytes_per_sec": 10900000
+  },
+  "load_start_unix_ns": 1794616585254266128,
+  "guest_clock_offset_ns": -227403754
+}

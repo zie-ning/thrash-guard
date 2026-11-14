@@ -8,6 +8,7 @@
 # 사용법: lab/m4/campaign.sh [--out-root DIR] [--reps N] [--list] [-- run.sh에 넘길 옵션...]
 #   --out-root DIR   결과를 모을 디렉터리 (기본 results/m4/<날짜>)
 #   --reps N         회차 수 (기본 3)
+#   --loads "A B"    돌릴 부하만 고른다 (기본: runaway_growth spike_mem normal_burst)
 #   --list           돌릴 목록만 보여 준다
 #   --               이후의 옵션은 모든 run.sh 호출에 그대로 넘긴다 (예: -- --burst-mib 450)
 #
@@ -17,6 +18,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT_ROOT="$ROOT/results/m4/$(date +%Y%m%d)"
 REPS=3
+LOADS="runaway_growth spike_mem normal_burst"
 LIST=0
 EXTRA=()
 
@@ -24,6 +26,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --out-root) OUT_ROOT="$2"; shift 2 ;;
         --reps) REPS="$2"; shift 2 ;;
+        --loads) LOADS="$2"; shift 2 ;;
         --list) LIST=1; shift ;;
         --) shift; EXTRA=("$@"); break ;;
         *) echo "알 수 없는 옵션: $1" >&2; exit 2 ;;
@@ -33,10 +36,13 @@ done
 
 plan=()
 for rep in $(seq 1 "$REPS"); do
-    for load in runaway_growth spike_mem; do
-        plan+=("$load dry $rep" "$load kill $rep")
+    for load in $LOADS; do
+        case "$load" in
+            runaway_growth|spike_mem) plan+=("$load dry $rep" "$load kill $rep") ;;
+            normal_burst) plan+=("normal_burst dry $rep") ;;
+            *) echo "--loads에는 runaway_growth, spike_mem, normal_burst만 쓴다: $load" >&2; exit 2 ;;
+        esac
     done
-    plan+=("normal_burst dry $rep")
 done
 
 echo "실행 ${#plan[@]}회 -> $OUT_ROOT" >&2

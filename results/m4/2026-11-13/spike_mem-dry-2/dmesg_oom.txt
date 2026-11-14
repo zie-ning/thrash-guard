@@ -1,0 +1,3 @@
+[   85.957336] containerd invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=-999
+[   85.957712] oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=containerd.service,mems_allowed=0,global_oom,task_memcg=/system.slice/tg-load.service,task=tg-load,pid=1486,uid=0
+[   85.957729] Out of memory: Killed process 1486 (tg-load) total-vm:667672kB, anon-rss:646016kB, file-rss:0kB, shmem-rss:0kB, UID:0 pgtables:1300kB oom_score_adj:0

@@ -1,0 +1,25 @@
+Started thrash-guard: terminate a culprit cgroup under memory thrashing.
+thrash-guard 유효 설정:
+  모드: 실제 종료
+  target_parent=/sys/fs/cgroup/system.slice
+  target_match=tg-load.service,tg-canary.service
+  trigger: full 150000/1000000 us
+  판단: 최근 10초 평균 full >= 10% (샘플 250 ms, 40칸)
+  io 경로: 평균 io full >= 50% 이고 가용 메모리 <= 5% (0이면 끔)
+  안전장치: grace 30초, cooldown 60초, 시간당 최대 3회
+  로그: 표준 오류 (링버퍼 16 KiB)
+  자기 보호: mlock=yes, oom_score_adj=-1000
+2026-11-13T15:34:57.372Z warn no cgroup under target_parent matches target_match, nothing will be terminated
+2026-11-13T15:34:57.372Z info start mode=kill
+2026-11-13T15:35:18.418Z info trigger watch start
+2026-11-13T15:35:28.420Z info judge skip reason=mem_available sys_avg_x100=166 io_avg_x100=8042 avail_x100=5471
+2026-11-13T15:35:34.669Z info judge calm sys_avg_x100=0 io_avg_x100=2275
+2026-11-13T15:35:55.834Z info trigger watch start
+2026-11-13T15:36:05.835Z info judge calm sys_avg_x100=0 io_avg_x100=76
+2026-11-13T15:38:02.818Z info trigger watch start
+2026-11-13T15:38:12.819Z info judge skip reason=no_candidate sys_avg_x100=2172 io_avg_x100=8053 avail_x100=0
+2026-11-13T15:38:13.069Z warn judge kill cand=tg-load.service dry_run=0 result=0 path=mem sys_avg_x100=2141 io_avg_x100=8166 avail_x100=0 max_bytes=683499520 growth_bytes=26468352 growing=1
+2026-11-13T15:38:13.069Z info judge cand name=tg-canary.service max_bytes=4784128 growth_bytes=110592 ready=1 eligible=0 growing=0 grace=0 protected=1
+2026-11-13T15:38:13.069Z info judge cand name=tg-load.service max_bytes=683499520 growth_bytes=26468352 ready=1 eligible=1 growing=1 grace=0 protected=0
+2026-11-13T15:38:15.706Z info trigger watch start
+2026-11-13T15:38:25.708Z info judge calm sys_avg_x100=92 io_avg_x100=1995

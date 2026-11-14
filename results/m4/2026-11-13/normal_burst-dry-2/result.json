@@ -1,0 +1,63 @@
+{
+  "id": "normal_burst-dry-2",
+  "load": "normal_burst",
+  "load_args": "burst --size-mib 400 --hold 5 --rest 10",
+  "daemon": "dry",
+  "cap_sec": 300,
+  "load_sec": 600,
+  "observe_sec": 300,
+  "baseline_sec": 15,
+  "pin_mib": 43,
+  "io_limit": {
+    "iops": 3000,
+    "bytes_per_sec": 10900000
+  },
+  "load_start_unix_ns": 1794584669497331009,
+  "guest_clock_offset_ns": -110356184,
+  "result": {
+    "status": "no_thrash",
+    "t0_s": null,
+    "t_detect_s": null,
+    "t_kill_s": null,
+    "t_resolve_s": null,
+    "t_oom_s": null,
+    "resolve_time_s": null,
+    "detect_delay_s": null,
+    "kill_to_resolve_s": null,
+    "full_peak_1s": 0.314,
+    "full_peak_10s_avg": 0.036,
+    "mem_avail_min_mib": 82.6,
+    "psi": {
+      "t0_s": null,
+      "t_resolve_s": null,
+      "resolve_time_s": null,
+      "t0_gap_s": null,
+      "disagree": false
+    },
+    "kernel_oom_kills": 0,
+    "first_actor": "none",
+    "daemon_decision_before_kernel": null,
+    "decision_without_thrash": false,
+    "decision_count": 0,
+    "decisions": [],
+    "protected_seen": [],
+    "killed_roles": [],
+    "e_alive_at_end": true,
+    "e_killed": false,
+    "e_canary": {
+      "max_gap_s": 1.0,
+      "ok_rate": 1.0,
+      "probes": 308
+    },
+    "e_ssh": {
+      "max_gap_s": 2.0,
+      "ok_rate": 1.0,
+      "probes": 309
+    },
+    "samples": 1342,
+    "buckets": 335,
+    "invalid_buckets": 0,
+    "daemon_log": true,
+    "notes": []
+  }
+}

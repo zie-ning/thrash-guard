@@ -1,0 +1,6 @@
+tg-load mode=anon t_s=2 alloc_mib=497 touches=127232 max_batch_ms=2665
+tg-load mode=anon t_s=4 alloc_mib=524 touches=6912 max_batch_ms=236
+tg-load mode=anon t_s=5 alloc_mib=545 touches=5376 max_batch_ms=379
+tg-load mode=anon t_s=6 alloc_mib=557 touches=3072 max_batch_ms=257
+tg-load mode=anon t_s=7 alloc_mib=565 touches=2048 max_batch_ms=267
+tg-load mode=anon t_s=36 alloc_mib=566 touches=256 max_batch_ms=0

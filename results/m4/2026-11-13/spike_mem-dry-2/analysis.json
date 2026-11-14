@@ -1,0 +1,60 @@
+{
+  "status": "resolved",
+  "t0_s": 5.5,
+  "t_detect_s": 6.9,
+  "t_kill_s": null,
+  "t_resolve_s": 13.2,
+  "t_oom_s": 8.4,
+  "resolve_time_s": 7.7,
+  "detect_delay_s": 1.4,
+  "kill_to_resolve_s": null,
+  "full_peak_1s": 0.245,
+  "full_peak_10s_avg": 0.047,
+  "mem_avail_min_mib": 0.0,
+  "psi": {
+    "t0_s": null,
+    "t_resolve_s": null,
+    "resolve_time_s": null,
+    "t0_gap_s": null,
+    "disagree": true
+  },
+  "kernel_oom_kills": 1,
+  "first_actor": "kernel",
+  "daemon_decision_before_kernel": true,
+  "decision_without_thrash": false,
+  "decision_count": 1,
+  "decisions": [
+    {
+      "t_s": 6.9,
+      "cand": "tg-load.service",
+      "role": "load",
+      "dry_run": true,
+      "result": 0,
+      "path": "io",
+      "sys_avg_x100": "827",
+      "io_avg_x100": "9033",
+      "avail_x100": "138"
+    }
+  ],
+  "protected_seen": [
+    "tg-canary.service"
+  ],
+  "killed_roles": [],
+  "e_alive_at_end": true,
+  "e_killed": false,
+  "e_canary": {
+    "max_gap_s": 2.3,
+    "ok_rate": 0.75,
+    "probes": 8
+  },
+  "e_ssh": {
+    "max_gap_s": 7.7,
+    "ok_rate": 0.4,
+    "probes": 5
+  },
+  "samples": 202,
+  "buckets": 50,
+  "invalid_buckets": 0,
+  "daemon_log": true,
+  "notes": []
+}

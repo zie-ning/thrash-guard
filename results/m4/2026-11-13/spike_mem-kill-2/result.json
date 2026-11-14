@@ -1,0 +1,80 @@
+{
+  "id": "spike_mem-kill-2",
+  "load": "spike_mem",
+  "load_args": "anon --size-mib 650 --rate-mib 0",
+  "daemon": "kill",
+  "cap_sec": 300,
+  "load_sec": 600,
+  "observe_sec": 600,
+  "load_preexisting": true,
+  "baseline_sec": 15,
+  "pin_mib": 43,
+  "io_limit": {
+    "iops": 3000,
+    "bytes_per_sec": 10900000
+  },
+  "load_start_unix_ns": 1794617144489748859,
+  "guest_clock_offset_ns": -607979225,
+  "result": {
+    "status": "resolved",
+    "t0_s": 3.5,
+    "t_detect_s": 7.6,
+    "t_kill_s": 7.6,
+    "t_resolve_s": 13.7,
+    "t_oom_s": null,
+    "resolve_time_s": 10.2,
+    "detect_delay_s": 4.1,
+    "kill_to_resolve_s": 6.1,
+    "full_peak_1s": 0.539,
+    "full_peak_10s_avg": 0.169,
+    "mem_avail_min_mib": 7.9,
+    "psi": {
+      "t0_s": 2.8,
+      "t_resolve_s": 18.4,
+      "resolve_time_s": 15.5,
+      "t0_gap_s": -0.6,
+      "disagree": false
+    },
+    "kernel_oom_kills": 0,
+    "first_actor": "daemon",
+    "daemon_decision_before_kernel": true,
+    "decision_without_thrash": false,
+    "decision_count": 1,
+    "decisions": [
+      {
+        "t_s": 7.6,
+        "cand": "tg-load.service",
+        "role": "load",
+        "dry_run": false,
+        "result": 0,
+        "path": "mem",
+        "sys_avg_x100": "1425",
+        "io_avg_x100": "8869",
+        "avail_x100": "176"
+      }
+    ],
+    "protected_seen": [
+      "tg-canary.service"
+    ],
+    "killed_roles": [
+      "load"
+    ],
+    "e_alive_at_end": true,
+    "e_killed": false,
+    "e_canary": {
+      "max_gap_s": 3.3,
+      "ok_rate": 0.636,
+      "probes": 11
+    },
+    "e_ssh": {
+      "max_gap_s": 10.1,
+      "ok_rate": 0.455,
+      "probes": 11
+    },
+    "samples": 189,
+    "buckets": 46,
+    "invalid_buckets": 0,
+    "daemon_log": true,
+    "notes": []
+  }
+}
