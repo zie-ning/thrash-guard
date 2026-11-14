@@ -58,6 +58,7 @@ SSH_OK_RUN = 5             # T_resolve: SSH 프로브가 이만큼 연속 성공
 SSH_PROBE_TIMEOUT_S = 5    # ssh_probe.py의 기본 제한 시간. 프로브는 끝난 뒤에야 기록되므로 해소는 이만큼 기다려 확정한다
 SSH_COVERAGE_SLACK_S = 30  # 스래싱이 없었다고 확정하려면 관찰 구간 안에서 프로브 시작 시각의 빈틈이 이보다 길면 안 된다
 OOM_CLOCK_MARGIN_S = 1.0   # 커널 OOM과 데몬 종료의 선후를 가를 때 시계 차이 측정 오차로 두는 여유
+SAMPLE_MIN_LATENCY_BOUND_S = 1.0   # 가정: 샘플 전달 지연의 최솟값(로컬 VM에서 호스트로)은 이보다 작다
 FULL_RATIO = 0.10          # 보조 기록(psi)의 10% 기준 (관찰 기준이며 데몬 임계와 별개)
 PSI_WINDOW_S = 10          # 보조 기록(psi): T0는 이 창의 평균이 10% 이상일 때
 RESOLVE_RUN_S = 10         # 보조 기록(psi): 해소는 10% 미만이 이만큼 연속
@@ -390,7 +391,10 @@ def evaluate(d, now_ns=None, final=False):
                 # 샘플의 mono_us는 /proc/vmstat를 읽기 전에 찍힌다. 읽기가 늦어질 수 있으므로 끝은 수신 시각(카운터를
                 # 읽은 뒤에야 도착한다)으로 잡고, 시작은 직전 샘플의 mono_us(그 읽기 전)로 잡는다.
                 read_lo = (samples[i - 1]["mono_us"] * 1000 + clock) if i else smp["recv_ns"]
-                t_oom_lo = read_lo - OOM_CLOCK_MARGIN_S * NS
+                # clock은 전달 지연이 가장 짧은 샘플의 (수신 - mono_us)라 그 최소 지연만큼 늦게 추정된다. 이 최솟값은 자료만으로
+                # 알 수 없으므로 "로컬 VM에서 호스트로 오는 샘플의 최소 지연은 SAMPLE_MIN_LATENCY_BOUND_S 미만"이라고 가정하고
+                # 시작을 그만큼 더 일찍 잡는다. 모든 샘플이 이 가정보다 오래 지연되면 선후를 잘못 가를 수 있다.
+                t_oom_lo = read_lo - (OOM_CLOCK_MARGIN_S + SAMPLE_MIN_LATENCY_BOUND_S) * NS
                 t_oom_hi = smp["recv_ns"] + OOM_CLOCK_MARGIN_S * NS
                 break
 

@@ -418,6 +418,24 @@ class TestFirstActorUncertainty(Base):
             f.write(f"{iso(BASE + 48 * NS)} warn judge kill cand=tg-load.service dry_run=0 result=0 path=memory\n")
         self.assertEqual(m4.evaluate(self.d, final=True)["first_actor"], "ambiguous")
 
+    def test_common_delivery_delay_within_the_assumed_bound(self):
+        # 모든 샘플이 1.5초씩 늦게 도착하면 가장 짧은 지연도 1.5초라 시계 차이가 1.5초 크게 추정된다.
+        # 가정한 최소 지연 상한(1초)과 시계 여유(1초)로 구간 시작을 일찍 잡으므로, 실제 구간(44.75~45초) 안의
+        # 데몬 종료(44.9초)가 daemon 선행으로 잘못 판정되지 않는다.
+        write_run(self.d)
+        write_ssh(self.d, [(40, 70)])
+        write_samples(self.d, [(40, 70, 0.5)], oom_at=45)
+        path = os.path.join(self.d, "samples.log")
+        out = []
+        for line in read_lines(path):
+            recv, rest = line.split("\t", 1)
+            out.append(f"{int(recv) + 1_500_000_000}\t{rest}")
+        with open(path, "w") as f:
+            f.write("\n".join(out) + "\n")
+        with open(os.path.join(self.d, "daemon.log"), "w") as f:
+            f.write(f"{iso(BASE + 44_900_000_000)} warn judge kill cand=tg-load.service dry_run=0 result=0 path=memory\n")
+        self.assertEqual(m4.evaluate(self.d, final=True)["first_actor"], "ambiguous")
+
 
 class TestEProbe(Base):
     def test_gap_is_clipped_to_the_window(self):
