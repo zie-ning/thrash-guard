@@ -20,3 +20,13 @@ __pycache__/
 
 # 스모크 테스트 결과 (참고용으로만 로컬에 두고 커밋하지 않는다)
 /results/m1-smoke/
+# 측정 원본(실행별 로그, 프로브 기록 등)은 모두 로컬에만 둔다. 보고서가 직접 싣는 요약표와 그래프만 예외로 추적한다.
+# 이미 추적 중인 결과(m0-check, m1, m3)는 영향을 받지 않는다.
+/results/*
+!/results/m4/
+/results/m4/*
+!/results/m4/2026-11-13/
+/results/m4/2026-11-13/*
+!/results/m4/2026-11-13/summary.md
+!/results/m4/2026-11-13/summary.json
+!/results/m4/2026-11-13/*.svg
