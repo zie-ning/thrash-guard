@@ -6,7 +6,10 @@
  * vda 읽기 완료 횟수, vda 읽은 섹터 수(512바이트). 마지막 두 값은 처리량 상한이 실제로 걸리는지 보려는 것이다.
  * stdio와 힙 할당을 쓰지 않는다.
  *
- * 사용법: psirec <출력 경로> [초]    (초를 생략하면 신호가 올 때까지)
+ * PID를 셋째 인자로 주면 그 프로세스의 minflt, majflt(누적), VmRSS, VmLck(kB) 네 열을 끝에 더한다(14열).
+ * 데몬이 스래싱 중 쫓겨나 디스크에서 다시 읽히는지 보려는 것이다.
+ *
+ * 사용법: psirec <출력 경로> [초 [PID]]    (초가 0이거나 생략되면 신호가 올 때까지)
  */
 #include <fcntl.h>
 #include <signal.h>
@@ -104,6 +107,55 @@ static void disk_reads(const char *buf, size_t n, const char *dev, uint64_t *rea
     }
 }
 
+/* /proc/<pid>/stat에서 minflt(10번째 필드)와 majflt(12번째)를 읽는다. comm에 공백이 있을 수 있어 마지막 ')' 뒤부터 센다. */
+static void pid_faults(const char *buf, size_t n, uint64_t *minflt, uint64_t *majflt)
+{
+    size_t p = n;
+    int field = 2; /* ')'가 2번째 필드의 끝 */
+
+    *minflt = 0;
+    *majflt = 0;
+    while (p > 0 && buf[p - 1] != ')')
+        p--;
+    if (p == 0)
+        return;
+    while (p < n && field < 12) {
+        while (p < n && buf[p] == ' ')
+            p++;
+        field++;
+        if (field == 10 || field == 12) {
+            uint64_t v = 0;
+            for (size_t k = p; k < n && buf[k] >= '0' && buf[k] <= '9'; k++)
+                v = v * 10 + (uint64_t)(buf[k] - '0');
+            if (field == 10)
+                *minflt = v;
+            else
+                *majflt = v;
+        }
+        while (p < n && buf[p] != ' ')
+            p++;
+    }
+}
+
+/* /proc/<pid>/status에서 "key:" 줄의 kB 값을 읽는다. 없으면 0. */
+static uint64_t status_kb(const char *buf, size_t n, const char *key)
+{
+    size_t kl = strlen(key);
+
+    for (size_t i = 0; i + kl < n; i++) {
+        if ((i == 0 || buf[i - 1] == '\n') && memcmp(buf + i, key, kl) == 0) {
+            uint64_t v = 0;
+            size_t k = i + kl;
+            while (k < n && (buf[k] == ' ' || buf[k] == '\t'))
+                k++;
+            for (; k < n && buf[k] >= '0' && buf[k] <= '9'; k++)
+                v = v * 10 + (uint64_t)(buf[k] - '0');
+            return v;
+        }
+    }
+    return 0;
+}
+
 static size_t put_u64(char *out, uint64_t v)
 {
     char t[24];
@@ -130,12 +182,32 @@ int main(int argc, char **argv)
     struct timespec next;
     char buf[1024];
     static char dbuf[16384];
-    char line[320];
+    char line[400];
+
+    int pst = -1; /* 데몬 /proc/<pid>/stat */
+    int pss = -1; /* 데몬 /proc/<pid>/status */
+    char pbuf[1024];
 
     if (argc < 2)
         return 2;
     if (argc > 2)
         secs = strtoul(argv[2], NULL, 10);
+    if (argc > 3) {
+        /* 대상 PID의 page fault와 VmRSS/VmLck 열을 더한다. 프로세스가 사라지면 0을 적는다. */
+        char path[64] = "/proc/";
+        size_t pl = strlen(path);
+
+        if (strlen(argv[3]) > 10 || argv[3][0] < '0' || argv[3][0] > '9')
+            return 2;
+        memcpy(path + pl, argv[3], strlen(argv[3]));
+        pl += strlen(argv[3]);
+        memcpy(path + pl, "/stat", 6);
+        pst = open(path, O_RDONLY | O_CLOEXEC);
+        memcpy(path + pl, "/status", 8);
+        pss = open(path, O_RDONLY | O_CLOEXEC);
+        if (pst < 0 || pss < 0)
+            return 3;
+    }
     for (int i = 0; i < 3; i++) {
         fd[i] = open(files[i], O_RDONLY | O_CLOEXEC);
         if (fd[i] < 0)
@@ -179,6 +251,22 @@ int main(int argc, char **argv)
             len += put_u64(line + len, rd);
             line[len++] = ' ';
             len += put_u64(line + len, sec);
+        }
+        if (pst >= 0) {
+            uint64_t v[4] = {0, 0, 0, 0};
+
+            n = pread(pst, pbuf, sizeof(pbuf), 0);
+            if (n > 0)
+                pid_faults(pbuf, (size_t)n, &v[0], &v[1]);
+            n = pread(pss, pbuf, sizeof(pbuf), 0);
+            if (n > 0) {
+                v[2] = status_kb(pbuf, (size_t)n, "VmRSS:");
+                v[3] = status_kb(pbuf, (size_t)n, "VmLck:");
+            }
+            for (int k = 0; k < 4; k++) {
+                line[len++] = ' ';
+                len += put_u64(line + len, v[k]);
+            }
         }
         line[len++] = '\n';
         if (write(out, line, len) < 0)
