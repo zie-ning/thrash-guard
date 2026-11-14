@@ -8,7 +8,7 @@
         "load": "runaway_growth",
         "dry_values": [
           "inf",
-          20.2,
+          "inf",
           "inf"
         ],
         "kill_values": [
@@ -99,38 +99,37 @@
         "runaway_growth-dry-3"
       ],
       "status": {
-        "unresolved": 2,
-        "resolved": 1
+        "unresolved": 3
       },
       "resolve_values": [
         "inf",
-        20.2,
+        "inf",
         "inf"
       ],
       "resolve_median": "inf",
-      "t0_median": 156.8,
+      "t0_median": 163.0,
       "t0_seen": 3,
-      "detect_delay_median": 11.2,
+      "detect_delay_median": 10.7,
       "kill_to_resolve_median": null,
       "canary_gap_values": [
         67.7,
-        2.2,
+        17.7,
         7.1
       ],
-      "canary_gap_median": 7.1,
-      "canary_ok_median": 0.733,
+      "canary_gap_median": 17.7,
+      "canary_ok_median": 0.403,
       "ssh_gap_values": [
         300.0,
-        17.7,
+        300.0,
         300.0
       ],
       "ssh_gap_median": 300.0,
       "first_actor": {
-        "kernel": 2,
-        "none": 1
+        "kernel": 1,
+        "none": 2
       },
-      "kernel_oom_runs": 2,
-      "decision_count": 7,
+      "kernel_oom_runs": 1,
+      "decision_count": 9,
       "killed_roles": []
     },
     "runaway_growth-kill": {

@@ -280,8 +280,9 @@ def render_load_svg(groups, load, cap_s):
     # y 눈금: 0부터 마지막 눈금까지 50초 단위
     for v in range(0, last_tick + 1, step):
         yy = py(v)
+        label = f"{v}+" if v == last_tick else str(v)    # 마지막 눈금은 미해소(상한까지 찬 막대)를 뜻한다
         s.append(f'<line x1="{ax_l - 5}" y1="{yy:.1f}" x2="{ax_l}" y2="{yy:.1f}" stroke="black"/>'
-                 f'<text x="{ax_l - 9}" y="{yy + 4.5:.1f}" text-anchor="end">{v}</text>')
+                 f'<text x="{ax_l - 9}" y="{yy + 4.5:.1f}" text-anchor="end">{label}</text>')
     # 막대: 회차마다 Thrashing Guard(왼쪽), Linux Kernel(오른쪽). 값이 없거나 무효인 자리는 비워 둔다.
     bw = 0.35
     for i, rep in enumerate(reps):

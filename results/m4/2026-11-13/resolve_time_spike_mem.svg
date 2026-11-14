@@ -8,7 +8,7 @@
 <line x1="79" y1="241.3" x2="84" y2="241.3" stroke="black"/><text x="75" y="245.8" text-anchor="end">150</text>
 <line x1="79" y1="185.8" x2="84" y2="185.8" stroke="black"/><text x="75" y="190.3" text-anchor="end">200</text>
 <line x1="79" y1="130.2" x2="84" y2="130.2" stroke="black"/><text x="75" y="134.7" text-anchor="end">250</text>
-<line x1="79" y1="74.7" x2="84" y2="74.7" stroke="black"/><text x="75" y="79.2" text-anchor="end">300</text>
+<line x1="79" y1="74.7" x2="84" y2="74.7" stroke="black"/><text x="75" y="79.2" text-anchor="end">300+</text>
 <rect class="bar" x="125.4" y="399.9" width="58.0" height="8.1" fill="#a6d075"/>
 <rect class="bar" x="183.4" y="388.8" width="58.0" height="19.2" fill="#39aed6"/>
 <line x1="183.4" y1="408" x2="183.4" y2="413" stroke="black"/><text x="183.4" y="428" text-anchor="middle">1</text>

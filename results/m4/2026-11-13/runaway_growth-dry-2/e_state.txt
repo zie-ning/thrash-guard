@@ -4,7 +4,7 @@ Id=tg-canary.service
 ActiveState=active
 SubState=running
 
-Result=oom-kill
+Result=success
 Id=tg-load.service
-ActiveState=failed
-SubState=failed
+ActiveState=inactive
+SubState=dead

@@ -1,7 +1,7 @@
 # 효과 검증 설계
 
 > 데몬이 실제로 멈춘 시스템을 더 빨리 되살리고 필수 프로세스를 지키는지 어떻게 확인하는지 설명한다.
-> 데몬 설계는 [design/overview.md](../design/overview.md), 용어와 측정 규칙은 [validation/measurement.md](measurement.md), 실험 환경은 [lab/environment.md](../lab/environment.md)에 있다. 값은 모두 임시 설계이며 본 실행 전이다.
+> 데몬 설계는 [design/overview.md](../design/overview.md), 용어와 측정 규칙은 [validation/measurement.md](measurement.md), 실험 환경은 [lab/environment.md](../lab/environment.md)에 있다. 값은 모두 임시 설계이며 본 실행 결과는 [reports/M4-validation.md](../reports/M4-validation.md)에 있다.
 
 ## 1. 검증할 주장
 
@@ -44,7 +44,7 @@ Facebook oomd 설계 글의 합성 테스트를 참고했다. 글에서 확인�
 |---|---|---|
 | **필수 프로세스 E** | 작은 응답 서버(카나리)와 VM 밖 SSH 프로브 | 함 (`oom_score_adj=-1000`) |
 | `RUNAWAY_GROWTH` | `tg-load anon`. 익명 메모리를 초당 4 MiB로 650 MiB까지 늘리며 계속 접근 | 안 함 |
-| `SPIKE_MEM` | `tg-load anon --rate-mib 0`. 650 MiB를 즉시 할당하고 계속 접근 | 안 함 |
+| `SPIKE_MEM` | `tg-load anon --rate-mib 0`. 650 MiB를 즉시 할당하고 계속 접근. 서비스를 데몬 시작 전에 대기 상태로 만들어 두고 기준 구간 뒤에 신호 파일로 급증시킨다(이미 떠 있던 프로세스의 급증, 시작 직후 유예 면제) | 안 함 |
 | 정상 버스트 | `tg-load burst`. 400 MiB를 약 5초 유지하고 해제, 10초 쉬기를 반복하며 300초(20사이클) 관찰. 오탐 확인용 | 안 함 |
 
 `RUNAWAY_GROWTH`의 650 MiB, 초당 4 MiB, `mlock` 43 MiB는 M3의 처리량 제한 조건에서 livelock을 만든 값이다(`results/m3/20261113/G_throughput_*`, `H_iopath_*`). 이전에 적었던 초당 10 MiB는 측정한 적이 없어 바꿨다.
@@ -109,7 +109,7 @@ dry-run 대조군이 5분 안에 풀리지 않으면 "미해소(5분 이상)"로
 집계기 `lab/analyze/m4_summary.py`가 이 그래프와 요약표, 합불 판정(`summary.md`, `summary.json`)을 만든다. 그래프는 부하마다 하나(`resolve_time_runaway_growth.svg`, `resolve_time_spike_mem.svg`)이고, 모양은 Facebook 글의 그림을 따른다. 판정은 해소 시간을 켜짐 중앙값 대 dry-run 중앙값으로 비교하고(미해소는 무한대로 세며, 유효 실행이 부하·조건마다 2개 미만이면 판정 불가), E 생존과 정상 버스트는 한 번이라도 어기면 불합격으로 한다.
 
 **후보 유예와 감지 지연**: 데몬은 새로 발견한 후보 cgroup을 30초 동안 종료 대상에서 뺀다(막 시작해 커지는 정상 앱을 지키려는 안전 여유값, `startup_grace_sec`). 이 값은 바꾸지 않고 기본값 그대로 측정한다.
-`RUNAWAY_GROWTH`는 스래싱이 약 150초 뒤에 시작해 유예와 무관하다. 반면 `SPIKE_MEM`은 시작 약 6초에 SSH가 막히지만 데몬의 첫 결정이 약 33초(예비 실행)로 유예에 묶이므로, 켜짐의 해소 시간이 데몬의 판단 속도가 아니라 유예에 지배된다. 보고서에 이 사실을 명시한다.
+`RUNAWAY_GROWTH`는 스래싱이 약 150초 뒤에 시작해 유예와 무관하다. 반면 새 서비스로 시작한 `SPIKE_MEM`은 시작 약 6초에 SSH가 막히지만 데몬의 첫 결정이 약 33초(예비 실행)로 유예에 묶여 켜짐의 해소 시간이 유예에 지배된다. 그래서 본 실행의 `SPIKE_MEM`은 서비스를 데몬 시작 전에 대기 상태로 만들어 두고 급증시킨다(데몬 시작 때 있던 cgroup은 유예 면제). 새 서비스 방식의 6회는 `results/m4/2026-11-13-newproc/`에 비교용으로 남겼고 결과는 [보고서](../reports/M4-validation.md)에 있다.
 
 **V5 해석 주의**: 이 구성에서는 후보가 부하 하나뿐이라 선택 규칙(증가량·크기 우선)이 정상과 폭주를 구별하는지는 확인하지 않는다. 확인하는 것은 부하가 있을 때 데몬이 그것을 종료하고 시스템이 해소되는지, 보호된 E가 대상에서 빠지는지다.
 정상 앱을 잘못 고르는 경우는 보호 설정으로 해결하는 것이 원칙이며, 이 한계를 보고서에 명시한다(보호된 cgroup 제외는 M3에서 확인했다).

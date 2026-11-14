@@ -26,7 +26,7 @@
 
 | 부하 | 조건 | 실행 | 상태 | 해소 시간 중앙값(초) | 범위(초) | T0 중앙값(초) | 감지 지연(초) | 종료→해소(초) |
 |---|---|---|---|---|---|---|---|---|
-| RUNAWAY_GROWTH | dry | 3 | resolved 1, unresolved 2 | 미해소 | 20.2~미해소 | 156.8 | 11.2 | - |
+| RUNAWAY_GROWTH | dry | 3 | unresolved 3 | 미해소 | 미해소~미해소 | 163.0 | 10.7 | - |
 | RUNAWAY_GROWTH | kill | 3 | resolved 3 | 19.2 | 18.2~23.2 | 160.9 | 11.4 | 7.4 |
 | SPIKE_MEM | dry | 3 | resolved 3 | 13.5 | 7.7~17.3 | 1.6 | 1.4 | - |
 | SPIKE_MEM | kill | 3 | resolved 3 | 10.2 | 7.3~12.7 | 3.5 | 4.1 | 6.1 |
@@ -36,7 +36,7 @@
 
 | 부하 | 조건 | E 카나리 최대 무응답 중앙값(초) | 범위(초) | 카나리 성공률 중앙값 | SSH 최대 무응답 중앙값(초) | 데몬 선행 | 커널 OOM 실행 | 종료 결정 수 |
 |---|---|---|---|---|---|---|---|---|
-| RUNAWAY_GROWTH | dry | 7.1 | 2.2~67.7 | 73% | 300.0 | kernel 2, none 1 | 2 | 7 |
+| RUNAWAY_GROWTH | dry | 17.7 | 7.1~67.7 | 40% | 300.0 | kernel 1, none 2 | 1 | 9 |
 | RUNAWAY_GROWTH | kill | 1.6 | 1.6~2.3 | 100% | 16.2 | daemon 3 | 0 | 3 |
 | SPIKE_MEM | dry | 3.4 | 2.3~5.2 | 64% | 13.5 | kernel 3 | 3 | 1 |
 | SPIKE_MEM | kill | 3.3 | 2.4~4.1 | 64% | 10.1 | daemon 3 | 0 | 3 |
@@ -59,7 +59,7 @@
 | normal_burst-dry-2 | normal_burst | dry | no_thrash | - | - | - |
 | normal_burst-dry-3 | normal_burst | dry | no_thrash | - | - | - |
 | runaway_growth-dry-1 | runaway_growth | dry | unresolved | 156.8 | - | 167.0 |
-| runaway_growth-dry-2 | runaway_growth | dry | resolved | 152.0 | 20.2 | 164.9 |
+| runaway_growth-dry-2 | runaway_growth | dry | unresolved | 163.8 | - | 174.5 |
 | runaway_growth-dry-3 | runaway_growth | dry | unresolved | 163.0 | - | 174.2 |
 | runaway_growth-kill-1 | runaway_growth | kill | resolved | 156.9 | 18.2 | 167.9 |
 | runaway_growth-kill-2 | runaway_growth | kill | resolved | 160.9 | 19.2 | 172.3 |

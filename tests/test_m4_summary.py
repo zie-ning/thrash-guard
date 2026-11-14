@@ -253,7 +253,7 @@ class TestOutputs(Base):
         _, groups, cap, _ = self.judge()
         doc = xml.dom.minidom.parseString(m4s.render_load_svg(groups, "spike_mem", cap))
         ticks = [t.firstChild.data for t in doc.getElementsByTagName("text") if t.getAttribute("text-anchor") == "end"]
-        self.assertEqual(ticks, ["0", "50", "100", "150", "200", "250", "300"])
+        self.assertEqual(ticks, ["0", "50", "100", "150", "200", "250", "300+"])
 
     def test_bars_are_paired_per_rep_and_scaled(self):
         fill(self.root, "spike_mem", "dry", [100.0, 80.0, 60.0])
