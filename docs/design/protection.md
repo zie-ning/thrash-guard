@@ -125,7 +125,7 @@
 | 스캔 스레드, 링버퍼 | 단위 테스트(ASan/UBSan)와 스레드 경쟁 검사(TSan) 통과 (WSL) |
 | 줄당 로그 쓰기 비용, 유휴 시 기록 스레드 깨어남 | 약 1.9 µs, 3초 동안 0회 (WSL 실측) |
 | 초기화 이후 `malloc` 0회 | 통과 (WSL, `test_noalloc`: 실행 파일이 `malloc` 계열을 직접 정의해 libc 내부 호출까지 센다. 틱, 종료 결정, 스캔 스레드 재스캔, 기록 스레드 출력 구간에서 0회. 이 구간에 일부러 할당을 넣으면 실패하는 것을 확인함). 이벤트 루프 `poll` 경로와 `/proc` 읽기의 커널 내부 할당은 대상 밖 |
-| `VmRSS`, `VmLck`, 스트레스 중 루프 지연 | VM 실측(서비스 실행): 유휴와 스래싱 직후 모두 `VmRSS` 1432 kB, `VmLck` 1432 kB(전부 고정, 첫 서비스 시험에서 한 번 읽은 값), 스레드 3개. 스래싱 중 틱 지연은 23회 실행(틱 11,757회)에서 `late_ticks=0`, `sample_errors=0`, `kill_errors=0`, 최대 지연 15 ms. 가장 긴 정지는 약 6분. **`mlock`을 끈 대조군은 없어** `mlockall`의 기여는 입증하지 못했다([이슈 #6](https://github.com/zie-ning/thrash-guard/issues/6)) |
+| `VmRSS`, `VmLck`, 스트레스 중 루프 지연 | VM 실측(서비스 실행): 유휴와 스래싱 직후 모두 `VmRSS` 1432 kB, `VmLck` 1432 kB(전부 고정, 첫 서비스 시험에서 한 번 읽은 값), 스레드 3개. 스래싱 중 틱 지연은 23회 실행(틱 11,757회)에서 `late_ticks=0`, `sample_errors=0`, `kill_errors=0`, 최대 지연 15 ms. 가장 긴 정지는 약 6분. **`mlock` 대조군(처리량 10.9 MB/s 제한, dry-run, 5쌍)**: `mlock=no`는 5/5회에서 `late_ticks` 71~120, `max_delay_ms` 5.6~33초, 데몬 `majflt` 0에서 약 1,700~2,100으로 증가, `VmRSS` 1.4 MiB에서 약 300 kB로 감소했다. `mlock=yes`는 유효 4/4회에서 `late_ticks=0`, 최대 22 ms, `majflt` 증가 0이었다(1회는 커널 OOM killer가 먼저 hog를 종료해 제외). **[측정]** 이 조건에서 `mlockall`이 스래싱 중 틱 지연을 막았다. 원인은 데몬 페이지의 회수와 디스크 재적재로 보이며(`majflt` 증가와 `VmRSS` 감소와 일치, 추론), 각 팔 4~5회라 작은 차이는 구분하지 못한다. 회별 표는 `validation/mlock-control.md` |
 | 보호된 cgroup의 종료 제외 | VM 실측(도커, `--oom-score-adj=-1000`, 100 IOPS, prot 450 MiB 증가 중 + hog 250 MiB): 보호 없음(대조군) 3/3에서 데몬이 prot을 종료, 보호 있음(처치군) 유효 2/2에서 데몬이 hog를 종료하고 prot은 `protected=1`로 제외되어 생존. 처치군 1회는 데몬이 종료하기 전에 커널 OOM killer가 hog를 종료해 제외. 원본은 `results/m3/20261113/D_*` |
 | 스래싱 중 SSH 응답 유지(`MemoryLow`) | VM 실측(100 IOPS 유도 조건, 데몬 dry-run, hog 650 MiB, 각 3회): `ssh.service`, `system.slice`, `user.slice`에 각 32M을 걸어도 **로그인 불가 시간이 줄지 않았다**(보호 없음 333·315·198초 / 있음 359·484·305초, 198초는 커널 OOM killer가 종료). `memory.events`의 `low`가 3.7만~57만회 올라, 보호 구간 안의 메모리가 그래도 회수되었음을 보여 준다(swap 없이 익명 메모리가 가득하면 회수할 비보호 메모리가 없어 보호가 깨지는 것으로 추정, 미확인). 원본은 `results/m3/20261113/E_*`. `memory.min`은 시험하지 않았다 |
 
@@ -141,5 +141,5 @@
 - (확인됨) systemd 249는 `MemoryLow`를 부모 slice로 전파하지 않는다. 사슬 전체를 걸어도 이 시나리오에서는 SSH 응답이 개선되지 않았다.
 - `sshd`가 이미 자기 `oom_score_adj`를 `-1000`으로 두는지(그렇다면 sshd의 종료 보호는 이미 충족).
 - `memory.min`을 소량 걸면 효과가 있는지(M4 선택 시험).
-- `mlockall`이 스래싱 중 데몬 틱 지연을 막는지(`mlock` 대조군, 이슈 #6).
+- (확인됨) `mlockall`이 스래싱 중 데몬 틱 지연을 막는지: 막는다(`mlock` 대조군, 이슈 #6, 3.4절 검증 상태). 데몬이 더 커지거나 다른 조건에서도 같은지는 확인하지 않았다.
 - 데몬에 `mlockall`과 `memory.low`를 함께 걸 때 `memory.low`가 추가로 효과가 있는지.
