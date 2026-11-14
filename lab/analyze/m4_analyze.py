@@ -229,7 +229,10 @@ def find_flag_run(flags, want, need, start=0):
 
 def probes_cover(starts, win_start, win_end, slack_ns):
     """프로브 시작 시각이 창 [win_start, win_end]를 빈틈(slack_ns 초과) 없이 덮는가. 시작·끝과 프로브 사이 모두 본다."""
-    pts = [win_start] + sorted(t for t in starts if win_start <= t <= win_end) + [win_end]
+    inside = sorted(t for t in starts if win_start <= t <= win_end)
+    if not inside:
+        return False    # 창이 slack보다 짧아도 프로브가 하나도 없으면 관찰한 것이 아니다
+    pts = [win_start] + inside + [win_end]
     return all(b - a <= slack_ns for a, b in zip(pts, pts[1:]))
 
 
@@ -331,13 +334,16 @@ def evaluate(d, now_ns=None, final=False):
             confirmed = candidate and (final or now_ns >= seq[r1[1]][0] + SSH_PROBE_TIMEOUT_S * NS)
             if confirmed:
                 t_resolve = seq[r1[1]][1]
+            # 경계(cap, 부하 종료) 직전에 시작해 아직 기록되지 않은 성공 프로브가 해소 후보를 완성할 수 있으므로,
+            # 실행 중에는 경계에서 프로브 제한 시간이 지난 뒤에 미해소·잘림으로 확정한다.
+            grace = 0 if final else SSH_PROBE_TIMEOUT_S * NS
             if t_resolve is not None:
                 status = "resolved"
             elif candidate:
                 pass    # 해소 후보가 있는데 확정을 기다리는 중이다. cap이나 부하 종료 시각에 닿았어도 running으로 둔다
-            elif load_end is not None and now_ns >= load_end and load_end < t0 + cap_ns:
+            elif load_end is not None and now_ns >= load_end + grace and load_end < t0 + cap_ns:
                 status = "truncated"
-            elif now_ns >= t0 + cap_ns:
+            elif now_ns >= t0 + cap_ns + grace:
                 status = "unresolved"
         else:
             wait_s = observe_sec if observe_sec else DEFAULT_NO_THRASH_S
@@ -381,10 +387,11 @@ def evaluate(d, now_ns=None, final=False):
         for i, smp in enumerate(samples):
             if smp["oom_kill"] > base:
                 t_oom = smp["recv_ns"]
-                read_hi = smp["mono_us"] * 1000 + clock
-                read_lo = (samples[i - 1]["mono_us"] * 1000 + clock) if i else read_hi
+                # 샘플의 mono_us는 /proc/vmstat를 읽기 전에 찍힌다. 읽기가 늦어질 수 있으므로 끝은 수신 시각(카운터를
+                # 읽은 뒤에야 도착한다)으로 잡고, 시작은 직전 샘플의 mono_us(그 읽기 전)로 잡는다.
+                read_lo = (samples[i - 1]["mono_us"] * 1000 + clock) if i else smp["recv_ns"]
                 t_oom_lo = read_lo - OOM_CLOCK_MARGIN_S * NS
-                t_oom_hi = read_hi + OOM_CLOCK_MARGIN_S * NS
+                t_oom_hi = smp["recv_ns"] + OOM_CLOCK_MARGIN_S * NS
                 break
 
     # 데몬 판단

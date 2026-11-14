@@ -184,6 +184,37 @@ class TestSshOnsetAndResolve(Base):
         self.assertEqual(m4.evaluate(self.d, now_ns=BASE + 76 * NS)["status"], "running")
         self.assertEqual(m4.evaluate(self.d, now_ns=BASE + 80 * NS)["status"], "resolved")
 
+    def test_unrecorded_probe_before_cap_is_waited_for(self):
+        # 71초에 시작한 프로브만 아직 기록되지 않았다(성공 기록이 70, 72, 73, 74초 4개). cap(75초)에 닿아도
+        # 프로브 제한 시간(5초)이 지나기 전에는 미해소로 끝내지 않는다. 늦게 기록되면 5회 연속이 되어 해소다.
+        write_run(self.d, cap_sec=35)
+        write_ssh(self.d, [(40, 70)], secs=75)
+        path = os.path.join(self.d, "ssh_probe.tsv")
+        lines = read_lines(path)
+        pending = [row for row in lines if row.startswith(str(BASE + 71 * NS))]
+        self.assertEqual(len(pending), 1)
+        with open(path, "w") as f:
+            f.write("\n".join(row for row in lines if row not in pending) + "\n")
+        self.assertEqual(m4.evaluate(self.d, now_ns=BASE + 76 * NS)["status"], "running")
+        self.assertEqual(m4.evaluate(self.d, now_ns=BASE + 81 * NS)["status"], "unresolved")   # 끝내 기록되지 않으면 미해소
+        with open(path, "w") as f:
+            f.write("\n".join(lines) + "\n")                                                   # 늦게 기록됨
+        self.assertEqual(m4.evaluate(self.d, now_ns=BASE + 81 * NS)["status"], "resolved")
+
+    def test_unrecorded_probe_before_load_end_is_waited_for(self):
+        # 같은 상황에서 부하 종료(실행 시작 76초)가 경계인 경우: 종료 직후에 잘림으로 끝내지 않는다.
+        write_run(self.d, load_sec=56)
+        write_ssh(self.d, [(40, 100)], secs=100)
+        self.assertEqual(m4.evaluate(self.d, now_ns=BASE + 77 * NS)["status"], "running")
+        self.assertEqual(m4.evaluate(self.d, now_ns=BASE + 82 * NS)["status"], "truncated")
+
+    def test_short_observe_window_without_probes_is_not_no_thrash(self):
+        # 관찰 시간이 slack(30초) 이하여도 프로브가 하나도 없으면 스래싱이 없었다고 확정하지 않는다.
+        write_run(self.d, observe_sec=30)
+        self.assertEqual(m4.evaluate(self.d, now_ns=LOAD_START + 40 * NS, final=True)["status"], "incomplete")
+        write_ssh(self.d, [])
+        self.assertEqual(m4.evaluate(self.d, now_ns=LOAD_START + 40 * NS, final=True)["status"], "no_thrash")
+
     def test_no_thrash_needs_probes_across_the_whole_window(self):
         # 관찰 구간은 실행 시작 20초~140초. 프로브가 후반에만 있거나 중간에 빈틈이 있으면 스래싱이 없었다고 확정하지 않는다.
         for drop in (range(0, 110), range(60, 100)):
@@ -365,6 +396,26 @@ class TestFirstActorUncertainty(Base):
         open(path, "w").write("\n".join(out) + "\n")
         with open(os.path.join(self.d, "daemon.log"), "w") as f:
             f.write(f"{iso(BASE + 44_900_000_000)} warn judge kill cand=tg-load.service dry_run=0 result=0 path=memory\n")
+        self.assertEqual(m4.evaluate(self.d, final=True)["first_actor"], "ambiguous")
+
+
+    def test_delayed_counter_read_extends_the_oom_interval(self):
+        # mono_us는 카운터를 읽기 전에 찍힌다. OOM이 처음 보이는 샘플(45초에 찍힘)을 4.5초 늦게 읽어 49.5초에 받았다면
+        # OOM은 49.5초 이전 어디서든 일어났을 수 있으므로 48초의 데몬 종료와는 선후를 알 수 없다.
+        write_run(self.d)
+        write_ssh(self.d, [(40, 70)])
+        write_samples(self.d, [(40, 70, 0.5)], oom_at=45)
+        path = os.path.join(self.d, "samples.log")
+        out = []
+        for line in read_lines(path):
+            if "seq=180 " in line:
+                recv, rest = line.split("\t", 1)
+                line = f"{int(recv) + 4_500_000_000}\t{rest}"
+            out.append(line)
+        with open(path, "w") as f:
+            f.write("\n".join(out) + "\n")
+        with open(os.path.join(self.d, "daemon.log"), "w") as f:
+            f.write(f"{iso(BASE + 48 * NS)} warn judge kill cand=tg-load.service dry_run=0 result=0 path=memory\n")
         self.assertEqual(m4.evaluate(self.d, final=True)["first_actor"], "ambiguous")
 
 
