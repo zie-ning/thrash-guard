@@ -31,6 +31,7 @@ Thrash Guard의 문서 색인이다. 처음 읽는다면 **plan, design, validat
 |---|---|
 | [lab/environment.md](lab/environment.md) | 실험 환경, VM 플랫폼 선택 경과, 지금까지의 실측 기록(M0, PSI 트리거, 참고용 M1 재현 판정 기록) |
 | [reports/related-work.md](reports/related-work.md) | 선행 도구 조사 (작성 시점의 설계 기준) |
+| [reports/M4-validation.md](reports/M4-validation.md) | M4 효과 검증 보고서 (본 실행 결과와 한계) |
 
 ## 폴더 구성과 문서를 추가할 때
 

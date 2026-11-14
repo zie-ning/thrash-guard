@@ -16,12 +16,14 @@
  *   file-thrash  폭주 FILE_THRASH. 익명 메모리를 목표 크기까지 채운 뒤, 큰 파일을 mmap해
  *           무작위로 계속 읽는다. 파일이 남은 메모리보다 크면 같은 페이지를 쫓아냈다 다시 읽는다.
  *
- * 효과 검증의 부하와 모드 대응(docs/validation/overview.md 3절):
- *   정상 앱 W        steady
- *   정상 버스트      burst
- *   RUNAWAY_GROWTH   anon   (목표 크기를 RAM보다 크게, 예: --size-mib 4096 --rate-mib 10)
- *   FILE_THRASH      file-thrash
+ * 효과 검증의 부하와 모드 대응(docs/validation/overview.md 3절, 실행은 lab/m4/run.sh):
+ *   RUNAWAY_GROWTH   anon   (--size-mib 650 --rate-mib 4)
+ *   SPIKE_MEM        anon   (--size-mib 650 --rate-mib 0, 즉시 할당 후 계속 접근)
+ *   정상 버스트      burst  (--size-mib 400 --hold 5 --rest 10)
+ *   (BURST_MEM은 폭주로 맞추지 못해 이번 검증에서 뺐다. 같은 burst 모드로 시험할 수 있다)
  *   필수 프로세스 E  canary
+ *   배경(회수 불가)  pin    (--size-mib 43)
+ * steady(정상 앱 W)와 file-thrash는 구현돼 있으나 이번 효과 검증에서는 쓰지 않는다.
  *
  * 1초마다 표준 출력에 한 줄을 쓴다(key=value). 첫 토큰은 "tg-load", 둘째는 mode=...
  *   touches / reads / reqs : 그 1초 동안 처리한 횟수 (처리량)
