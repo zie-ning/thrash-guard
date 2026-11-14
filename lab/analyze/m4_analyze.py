@@ -56,7 +56,8 @@ US_PER_S = 1_000_000
 SSH_FAIL_RUN = 3           # T0: SSH 프로브가 이만큼 연속 실패
 SSH_OK_RUN = 5             # T_resolve: SSH 프로브가 이만큼 연속 성공
 SSH_PROBE_TIMEOUT_S = 5    # ssh_probe.py의 기본 제한 시간. 프로브는 끝난 뒤에야 기록되므로 해소는 이만큼 기다려 확정한다
-SSH_COVERAGE_SLACK_S = 30  # 스래싱이 없었다고 확정하려면 마지막 프로브가 관찰 구간 끝에서 이 안쪽까지 와 있어야 한다
+SSH_COVERAGE_SLACK_S = 30  # 스래싱이 없었다고 확정하려면 관찰 구간 안에서 프로브 시작 시각의 빈틈이 이보다 길면 안 된다
+OOM_CLOCK_MARGIN_S = 1.0   # 커널 OOM과 데몬 종료의 선후를 가를 때 시계 차이 측정 오차로 두는 여유
 FULL_RATIO = 0.10          # 보조 기록(psi)의 10% 기준 (관찰 기준이며 데몬 임계와 별개)
 PSI_WINDOW_S = 10          # 보조 기록(psi): T0는 이 창의 평균이 10% 이상일 때
 RESOLVE_RUN_S = 10         # 보조 기록(psi): 해소는 10% 미만이 이만큼 연속
@@ -226,6 +227,12 @@ def find_flag_run(flags, want, need, start=0):
     return None
 
 
+def probes_cover(starts, win_start, win_end, slack_ns):
+    """프로브 시작 시각이 창 [win_start, win_end]를 빈틈(slack_ns 초과) 없이 덮는가. 시작·끝과 프로브 사이 모두 본다."""
+    pts = [win_start] + sorted(t for t in starts if win_start <= t <= win_end) + [win_end]
+    return all(b - a <= slack_ns for a, b in zip(pts, pts[1:]))
+
+
 def window_gap(probes, win_start, win_end):
     """창 안의 E 최대 무응답(초)과 성공률. 프로브는 (완료 시각 ns, 성공 여부). 창 밖의 무응답은 자른다."""
     if win_end <= win_start:
@@ -320,11 +327,14 @@ def evaluate(d, now_ns=None, final=False):
                 win_end_limit = min(win_end_limit, load_end)
             # 프로브는 끝난 뒤에 기록된다. 연속 구간의 마지막 프로브보다 먼저 시작해 아직 끝나지 않은 프로브가
             # 나중에 실패로 기록되면 연속 성공이 깨지므로, 실행 중에는 제한 시간이 지난 뒤에 해소를 확정한다.
-            confirmed = r1 is not None and (final or now_ns >= seq[r1[1]][0] + SSH_PROBE_TIMEOUT_S * NS)
-            if confirmed and seq[r1[1]][1] <= win_end_limit:
+            candidate = r1 is not None and seq[r1[1]][1] <= win_end_limit
+            confirmed = candidate and (final or now_ns >= seq[r1[1]][0] + SSH_PROBE_TIMEOUT_S * NS)
+            if confirmed:
                 t_resolve = seq[r1[1]][1]
             if t_resolve is not None:
                 status = "resolved"
+            elif candidate:
+                pass    # 해소 후보가 있는데 확정을 기다리는 중이다. cap이나 부하 종료 시각에 닿았어도 running으로 둔다
             elif load_end is not None and now_ns >= load_end and load_end < t0 + cap_ns:
                 status = "truncated"
             elif now_ns >= t0 + cap_ns:
@@ -333,8 +343,7 @@ def evaluate(d, now_ns=None, final=False):
             wait_s = observe_sec if observe_sec else DEFAULT_NO_THRASH_S
             wait_end = load_start + int(wait_s) * NS
             if now_ns >= wait_end:
-                last_end = max((p[1] for p in seq), default=None)
-                if last_end is not None and last_end >= wait_end - SSH_COVERAGE_SLACK_S * NS:
+                if probes_cover([p[0] for p in seq], load_start, wait_end, SSH_COVERAGE_SLACK_S * NS):
                     status = "no_thrash"
                 else:
                     notes.append("SSH 프로브 기록이 관찰 구간을 덮지 못해 스래싱 미발생으로 확정하지 않았다")
@@ -361,15 +370,21 @@ def evaluate(d, now_ns=None, final=False):
     # 커널 OOM
     # t_oom은 실제 OOM 시각이 아니라 카운터 증가를 처음 받은 시각이다. 실제 시각은 직전 샘플 이후 어딘가이므로
     # 그 직전 샘플의 시각(t_oom_prev)을 함께 두어 데몬 종료와의 선후를 판정할 때 불확실한 구간을 둔다.
-    t_oom = t_oom_prev = None
+    # 수신 시각은 전송 지연이 섞여 있어 쓰지 않는다. 샘플의 guest 단조 시각(카운터를 읽은 시각)을 수신 시계로 옮겨
+    # (지연이 가장 짧은 샘플로 시계 차이를 추정) OOM이 일어난 구간 [t_oom_lo, t_oom_hi]를 잡고, 시계 오차 여유를 더한다.
+    t_oom = t_oom_lo = t_oom_hi = None
     oom_delta = 0
     if samples:
         base = samples[0]["oom_kill"]
         oom_delta = max(s["oom_kill"] for s in samples) - base
+        clock = min(s["recv_ns"] - s["mono_us"] * 1000 for s in samples)
         for i, smp in enumerate(samples):
             if smp["oom_kill"] > base:
                 t_oom = smp["recv_ns"]
-                t_oom_prev = samples[i - 1]["recv_ns"] if i else t_oom
+                read_hi = smp["mono_us"] * 1000 + clock
+                read_lo = (samples[i - 1]["mono_us"] * 1000 + clock) if i else read_hi
+                t_oom_lo = read_lo - OOM_CLOCK_MARGIN_S * NS
+                t_oom_hi = read_hi + OOM_CLOCK_MARGIN_S * NS
                 break
 
     # 데몬 판단
@@ -415,10 +430,10 @@ def evaluate(d, now_ns=None, final=False):
 
     # 선행 여부: 해소가 데몬의 종료 때문인지 커널 때문인지 (기록용)
     def before_kernel(t):
-        """t가 커널 OOM보다 앞서는가. 커널 OOM의 관찰 간격 안이면 선후를 알 수 없어 None."""
-        if t_oom is None or t < t_oom_prev:
+        """t가 커널 OOM보다 앞서는가. 커널 OOM이 일어난 구간(샘플 간격과 시계 오차) 안이면 선후를 알 수 없어 None."""
+        if t_oom is None or t < t_oom_lo:
             return True
-        return False if t > t_oom else None
+        return False if t > t_oom_hi else None
 
     first_actor = "none"
     if t_kill is not None:

@@ -67,6 +67,11 @@ def write_ssh(d, fail_spans, **kw):
     write_probes(d, "ssh_probe.tsv", fail_spans, **kw)
 
 
+def read_lines(path):
+    with open(path) as f:
+        return f.read().splitlines()
+
+
 def iso(guest_epoch_ns):
     dt = datetime.datetime(1970, 1, 1) + datetime.timedelta(microseconds=guest_epoch_ns // 1000)
     return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt.microsecond // 1000:03d}Z"
@@ -163,6 +168,36 @@ class TestSshOnsetAndResolve(Base):
         self.assertEqual(m4.evaluate(self.d, now_ns=LOAD_START + 130 * NS, final=True)["status"], "incomplete")
         write_ssh(self.d, [], secs=60)   # 실행 시작 60초에서 끊김(관찰 구간 끝은 140초)
         self.assertEqual(m4.evaluate(self.d, now_ns=LOAD_START + 130 * NS, final=True)["status"], "incomplete")
+
+    def test_pending_confirmation_is_not_cut_by_cap(self):
+        # 해소 후보(70~74초 연속 성공, 완료 74.2초)가 cap(T0 40초 + 35초 = 75초) 안에 있지만 확정은 79초 이후다.
+        # 확정을 기다리는 동안 cap에 닿았다고 미해소로 끝내면 안 된다.
+        write_run(self.d, cap_sec=35)
+        write_ssh(self.d, [(40, 70)])
+        self.assertEqual(m4.evaluate(self.d, now_ns=BASE + 76 * NS)["status"], "running")
+        self.assertEqual(m4.evaluate(self.d, now_ns=BASE + 80 * NS)["status"], "resolved")
+
+    def test_pending_confirmation_is_not_cut_by_load_end(self):
+        # 부하가 실행 시작 76초(load_sec 56)에 끝나는 경우도 같다. 해소 완료(74.2초)는 부하 종료 전이다.
+        write_run(self.d, load_sec=56)
+        write_ssh(self.d, [(40, 70)])
+        self.assertEqual(m4.evaluate(self.d, now_ns=BASE + 76 * NS)["status"], "running")
+        self.assertEqual(m4.evaluate(self.d, now_ns=BASE + 80 * NS)["status"], "resolved")
+
+    def test_no_thrash_needs_probes_across_the_whole_window(self):
+        # 관찰 구간은 실행 시작 20초~140초. 프로브가 후반에만 있거나 중간에 빈틈이 있으면 스래싱이 없었다고 확정하지 않는다.
+        for drop in (range(0, 110), range(60, 100)):
+            with self.subTest(drop=(drop.start, drop.stop)):
+                d = tempfile.mkdtemp(dir=self.d)
+                write_run(d, observe_sec=120)
+                write_ssh(d, [])
+                path = os.path.join(d, "ssh_probe.tsv")
+                with open(path) as f:
+                    head, *rows = f.read().splitlines()
+                kept = [row for i, row in enumerate(rows) if i not in drop]
+                with open(path, "w") as f:
+                    f.write("\n".join([head] + kept) + "\n")
+                self.assertEqual(m4.evaluate(d, now_ns=LOAD_START + 130 * NS, final=True)["status"], "incomplete")
 
     def test_observe_window_for_no_thrash(self):
         write_run(self.d, observe_sec=120)
@@ -312,6 +347,25 @@ class TestFirstActorUncertainty(Base):
         r = m4.evaluate(self.d, final=True)
         self.assertEqual(r["first_actor"], "ambiguous")
         self.assertIsNone(r["daemon_decision_before_kernel"])
+
+
+    def test_delayed_receipt_of_previous_sample_does_not_hide_the_gap(self):
+        # 직전 샘플(44.75초에 읽음)이 2초 늦게 수신돼도 OOM 구간은 읽은 시각으로 잡는다.
+        # 수신 시각으로 잡으면 구간이 46.75초에서 시작해 44.9초의 데몬 종료를 daemon 선행으로 오판한다.
+        write_run(self.d)
+        write_ssh(self.d, [(40, 70)])
+        write_samples(self.d, [(40, 70, 0.5)], oom_at=45)
+        path = os.path.join(self.d, "samples.log")
+        out = []
+        for line in read_lines(path):
+            if "seq=179 " in line:
+                recv, rest = line.split("\t", 1)
+                line = f"{int(recv) + 2 * NS}\t{rest}"
+            out.append(line)
+        open(path, "w").write("\n".join(out) + "\n")
+        with open(os.path.join(self.d, "daemon.log"), "w") as f:
+            f.write(f"{iso(BASE + 44_900_000_000)} warn judge kill cand=tg-load.service dry_run=0 result=0 path=memory\n")
+        self.assertEqual(m4.evaluate(self.d, final=True)["first_actor"], "ambiguous")
 
 
 class TestEProbe(Base):
