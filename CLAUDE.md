@@ -44,4 +44,4 @@
 - 스래싱 실험은 WSL에서 하지 않는다. Windows용 QEMU + WHPX로 만든 실험용 VM(`lab/vm/`)에서만 한다.
 - WSL은 `networkingMode=mirrored`다. WSL의 `127.0.0.1`로 VM의 SSH(2222)·QMP(4444) 포트에 접속한다.
 - WHPX에서는 게스트 재부팅이 실패한다. VM 재시작은 종료 후 새로 켜는 방식(`lab/vm/reset-run.sh`)으로 한다.
-- VM 이미지(`lab/vm/images/`)는 커밋하지 않는다. 측정 원본 데이터(`results/`)는 커밋한다.
+- VM 이미지(`lab/vm/images/`)는 커밋하지 않는다. 측정 원본 데이터(`results/`)는 모두 `.gitignore`로 처리해 커밋하지 않는다. 요약표와 그래프처럼 보고서가 직접 싣는 파일만 예외로 추적한다.

@@ -32,10 +32,13 @@ static size_t proc_path(char *out, size_t cap, uint64_t pid)
         digits[nd++] = (char)('0' + pid % 10);
         pid /= 10;
     } while (pid > 0 && nd < sizeof(digits));
+    /* 반복문이 이미 nd를 sizeof(digits) 이하로 막는다. 정적 분석기가 배열 경계를 알도록 한 번 더 자른다. */
+    if (nd > sizeof(digits))
+        nd = sizeof(digits);
     if (nd + sizeof(tail) > cap)
         return 0;
-    while (nd > 0)
-        out[n++] = digits[--nd];
+    for (size_t i = nd; i > 0; i--)
+        out[n++] = digits[i - 1];
     memcpy(out + n, tail, sizeof(tail));
     return n + sizeof(tail) - 1;
 }

@@ -1,7 +1,7 @@
 # Thrash Guard 로드맵
 
 > 개략적인 순서와 진행 상황만 적는다. 목적과 범위는 [plan.md](plan.md), 데몬 설계는 [design/overview.md](design/overview.md), 검증 방법은 [validation/overview.md](validation/overview.md), 실험 환경과 실측은 [lab/environment.md](lab/environment.md)에 있다.
-> 최종 개정: 2026-11-12 (목적 재정의로 M1 축소, M2 삭제)
+> 최종 개정: 2026-11-13 (M4 효과 검증 구성 단순화: 부하 하나와 dry-run/켜짐 비교)
 
 ## 마일스톤
 
@@ -10,7 +10,7 @@
 | M0 | 기반: 저장소, 공용 모듈, 수집 경로, 실험용 VM | 완료 |
 | M1 | 검증 도구와 최소 재현 | 미착수 |
 | M3 | 데몬 MVP | 진행 중 |
-| M4 | 효과 검증 | 미착수 |
+| M4 | 효과 검증 | 본 실행 완료, 보고서 작성 ([reports/M4-validation.md](reports/M4-validation.md)) |
 | M5 | 개선 기능 | 후속 선택 |
 | M6 | 공개 정리 | 미착수 |
 | M7 | 후속 확장 | 후속 선택 |
@@ -25,11 +25,11 @@ M0 (완료) ─┬─ M1 (검증 도구, 최소 재현) ────────
 
 ## M1. 검증 도구와 최소 재현
 
-- `tg-load`: 정상 앱 W, 폭주 3종(`runaway`, `burst`, `spike`), 스래싱 변형, 정상 버스트, 필수 프로세스 카나리
+- `tg-load`: `RUNAWAY_GROWTH`(`anon`), `SPIKE_MEM`(`anon --rate-mib 0`), 정상 버스트(`burst`), 필수 프로세스 카나리(`canary`). 정상 앱 W(`steady`)와 `FILE_THRASH`(`file-thrash`) 모드는 구현돼 있으나 M4에서 쓰지 않는다
 - 단순한 실행 하네스 `lab/run.sh`: 스냅샷 복원, 데몬 꺼짐/켜짐, 부하 실행, 해소 또는 타임아웃, 결과 저장
-- 스래싱을 실제로 만드는 부하 찾기(시간 상자 하루, 제안), 스래싱 중 샘플러 누락률 확인
+- 부하 크기 예비 실행(`SPIKE_MEM`의 즉시 할당, 정상 버스트의 크기), 스래싱 중 샘플러 누락률 확인. 예비 실행은 2026-11-13에 마쳤고 `BURST_MEM`은 폭주로 맞추지 못해 제외했다(결과는 [validation/overview.md](validation/overview.md) 4절)
 
-완료 조건: 폭주 유형별 부하가 데몬 꺼짐 상태에서 일관되게 동작하고, 스래싱 변형이 재현되거나 재현되지 않은 사유와 범위가 기록된다.
+완료 조건: 폭주 2종과 정상 버스트가 데몬 dry-run에서 의도한 모양(폭주는 스래싱이 나고 정상 버스트는 종료 결정이 없음)으로 동작하고, 그렇지 않은 경우의 사유와 범위가 기록된다.
 
 참고: 이전 계획의 M1 작업(`tg-load`의 `anon`·`file`·`pin`·`canary` 모드, `lab/run.sh`, 재현 판정과 측정 결과)이 저장소에 있다. 재현 판정 실험은 **참고용**이며 위 설계의 근거나 전제가 아니다. 기록은 [lab/environment.md](lab/environment.md) 5절.
 
@@ -59,8 +59,10 @@ VM 검증(2026-11-13, 원본 `results/m3/20261113/`): 서비스 기동, 컨테�
 
 ## M4. 효과 검증
 
-정상 앱 W와 필수 프로세스 E를 두고 성격이 다른 폭주 프로세스를 붙여 데몬 꺼짐/켜짐을 비교한다(Facebook oomd 글의 합성 테스트를 줄인 방식). 합격은 결과로 판단하고,
-누가 종료됐는지는 기록 지표다. 자세한 내용은 [validation/overview.md](validation/overview.md). 완료 조건은 보고서 `docs/reports/M4-validation.md`에 V1~V5가 실측과 추론을 구분해 판정되고, 임계값 재보정 후보와 후속 개선 항목이 정리되는 것이다. 기준 디스크 조건은 처리량 약 10.9 MB/s 제한으로 하고, `memory.min` 소량 선택 시험과 데몬 `mlock` 대조군(이슈 #6)을 후보로 둔다.
+필수 프로세스 E와 부하 하나(`RUNAWAY_GROWTH`, `SPIKE_MEM`, 정상 버스트)를 함께 두고 데몬 dry-run(꺼짐 대용)과 켜짐을 3회씩 비교한다(Facebook oomd 글의 합성 테스트를 줄인 방식, 그래프도 같은 모양). 합격은 결과로 판단하고,
+누가 종료됐는지는 기록 지표다. 자세한 내용은 [validation/overview.md](validation/overview.md). 완료 조건은 보고서 `docs/reports/M4-validation.md`에 V1~V5가 실측과 추론을 구분해 판정되고, 임계값 재보정 후보와 후속 개선 항목이 정리되는 것이다. 기준 디스크 조건은 처리량 약 10.9 MB/s 제한이다. 한 실행은 T0 이후 최대 5분이고, 모두 15회(폭주 2종 × 2조건 × 3회 + 정상 버스트 dry-run 3회)다. `memory.min` 소량 선택 시험과 데몬 `mlock` 대조군(이슈 #6)은 M4 밖의 선택 시험으로 둔다.
+
+하네스: 실행 1회는 `lab/m4/run.sh`, 회차 전체는 `lab/m4/campaign.sh`, 결과 계산은 `lab/analyze/m4_analyze.py`(단위 테스트 `tests/test_m4_analyze.py`)다. 분석기는 합성 데이터 단위 테스트와 VM 스모크 2회(`runaway_growth` 켜짐·dry-run, `results/m4/smoke/`), 예비 실행(`results/m4/prelim/`)으로 확인했다. 집계기 `lab/analyze/m4_summary.py`(단위 테스트 `tests/test_m4_summary.py`)가 실행 결과를 모아 요약표, 합불 판정, 막대 그래프를 만든다. 합성 데이터와 스모크·예비 실행 기록으로만 확인했고 본 실행에는 아직 쓰지 않았다.
 
 ## 후속 (M5, M7)
 
@@ -71,7 +73,7 @@ VM 검증(2026-11-13, 원본 `results/m3/20261113/`): 서비스 기동, 컨테�
 
 - 컨테이너 런타임별 실제 cgroup 이름(기본 `target_match`는 임시)
 - PSI 트리거 등록 실패 시 동작(제안: 시작 거부)
-- 스래싱 변형 탐색의 시간 상자(제안: 하루, 소수의 시도)
+- M4 본 실행에서 재확인: T0·해소를 SSH 프로브 기준(3번 연속 실패, 5번 연속 성공)으로 바꿨고 이 연속 횟수는 예비 실행 10개를 보고 정한 임시값이다([validation/measurement.md](validation/measurement.md) 1절)
 - 공개 시점의 라이선스(oomd가 GPL-2.0이므로 코드는 가져오지 않는다)
 
 ## 작업 규칙
