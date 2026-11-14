@@ -58,6 +58,12 @@ for item in "${plan[@]}"; do
         echo "$id"
         continue
     fi
+    # 중간에 끊긴 실행의 디렉터리가 남아 있으면 옆으로 치우고 새로 돌린다(기록이 섞이지 않게).
+    if [ -e "$OUT_ROOT/$id" ]; then
+        mkdir -p "$OUT_ROOT/_failed"
+        mv "$OUT_ROOT/$id" "$OUT_ROOT/_failed/$id-$(date +%H%M%S)"
+        echo "이전에 끊긴 기록을 치웠다: $OUT_ROOT/_failed" >&2
+    fi
     echo "==== $id" >&2
     if ! "$ROOT/lab/m4/run.sh" --load "$load" --daemon "$mode" --id "$id" --out "$OUT_ROOT/$id" "${EXTRA[@]}"; then
         echo "실패: $id (다음 실행으로 넘어간다)" >&2

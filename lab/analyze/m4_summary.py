@@ -142,13 +142,16 @@ def judge_resolve(groups, load):
     out.update(dry_median=dm, kill_median=km, kill_worst=max(kill))
     faster = km < dm
     within = km <= RESOLVE_LIMIT_S
-    out["verdict"] = "합격" if (faster and within) else "불합격"
+    kill_unresolved = sum(1 for v in kill if v == math.inf)   # 종료해도 5분 안에 풀리지 않은 실행은 중앙값과 무관하게 실패
+    out["verdict"] = "합격" if (faster and within and not kill_unresolved) else "불합격"
     parts = [f"켜짐 중앙값 {fmt(km)}초 / dry-run 중앙값 {fmt(dm)}{'' if dm == math.inf else '초'}",
              f"켜짐 최악 {fmt(max(kill))}{'' if max(kill) == math.inf else '초'}"]
     if not faster:
         parts.append("켜짐이 dry-run보다 짧지 않다")
     if not within:
         parts.append(f"켜짐이 {RESOLVE_LIMIT_S}초를 넘는다")
+    if kill_unresolved:
+        parts.append(f"켜짐 {kill_unresolved}회가 T0 후 {DEFAULT_CAP_S}초 안에 해소되지 않았다")
     out["reason"] = ", ".join(parts)
     return out
 

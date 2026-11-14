@@ -55,6 +55,8 @@ NS = 1_000_000_000
 US_PER_S = 1_000_000
 SSH_FAIL_RUN = 3           # T0: SSH 프로브가 이만큼 연속 실패
 SSH_OK_RUN = 5             # T_resolve: SSH 프로브가 이만큼 연속 성공
+SSH_PROBE_TIMEOUT_S = 5    # ssh_probe.py의 기본 제한 시간. 프로브는 끝난 뒤에야 기록되므로 해소는 이만큼 기다려 확정한다
+SSH_COVERAGE_SLACK_S = 30  # 스래싱이 없었다고 확정하려면 마지막 프로브가 관찰 구간 끝에서 이 안쪽까지 와 있어야 한다
 FULL_RATIO = 0.10          # 보조 기록(psi)의 10% 기준 (관찰 기준이며 데몬 임계와 별개)
 PSI_WINDOW_S = 10          # 보조 기록(psi): T0는 이 창의 평균이 10% 이상일 때
 RESOLVE_RUN_S = 10         # 보조 기록(psi): 해소는 10% 미만이 이만큼 연속
@@ -316,7 +318,10 @@ def evaluate(d, now_ns=None, final=False):
             win_end_limit = t0 + cap_ns
             if load_end is not None:
                 win_end_limit = min(win_end_limit, load_end)
-            if r1 is not None and seq[r1[1]][1] <= win_end_limit:
+            # 프로브는 끝난 뒤에 기록된다. 연속 구간의 마지막 프로브보다 먼저 시작해 아직 끝나지 않은 프로브가
+            # 나중에 실패로 기록되면 연속 성공이 깨지므로, 실행 중에는 제한 시간이 지난 뒤에 해소를 확정한다.
+            confirmed = r1 is not None and (final or now_ns >= seq[r1[1]][0] + SSH_PROBE_TIMEOUT_S * NS)
+            if confirmed and seq[r1[1]][1] <= win_end_limit:
                 t_resolve = seq[r1[1]][1]
             if t_resolve is not None:
                 status = "resolved"
@@ -326,8 +331,13 @@ def evaluate(d, now_ns=None, final=False):
                 status = "unresolved"
         else:
             wait_s = observe_sec if observe_sec else DEFAULT_NO_THRASH_S
-            if now_ns >= load_start + int(wait_s) * NS:
-                status = "no_thrash"
+            wait_end = load_start + int(wait_s) * NS
+            if now_ns >= wait_end:
+                last_end = max((p[1] for p in seq), default=None)
+                if last_end is not None and last_end >= wait_end - SSH_COVERAGE_SLACK_S * NS:
+                    status = "no_thrash"
+                else:
+                    notes.append("SSH 프로브 기록이 관찰 구간을 덮지 못해 스래싱 미발생으로 확정하지 않았다")
 
     if final and status == "running":
         status = "incomplete"
@@ -349,12 +359,18 @@ def evaluate(d, now_ns=None, final=False):
             avail_min_mib = round(min(post_avail) / 1024, 1)
 
     # 커널 OOM
-    t_oom = None
+    # t_oom은 실제 OOM 시각이 아니라 카운터 증가를 처음 받은 시각이다. 실제 시각은 직전 샘플 이후 어딘가이므로
+    # 그 직전 샘플의 시각(t_oom_prev)을 함께 두어 데몬 종료와의 선후를 판정할 때 불확실한 구간을 둔다.
+    t_oom = t_oom_prev = None
     oom_delta = 0
     if samples:
         base = samples[0]["oom_kill"]
         oom_delta = max(s["oom_kill"] for s in samples) - base
-        t_oom = next((s["recv_ns"] for s in samples if s["oom_kill"] > base), None)
+        for i, smp in enumerate(samples):
+            if smp["oom_kill"] > base:
+                t_oom = smp["recv_ns"]
+                t_oom_prev = samples[i - 1]["recv_ns"] if i else t_oom
+                break
 
     # 데몬 판단
     dlog = parse_daemon_log(_read_text(os.path.join(d, "daemon.log")), offset_ns)
@@ -368,7 +384,7 @@ def evaluate(d, now_ns=None, final=False):
     e_state = (_read_text(os.path.join(d, "e_state.txt")) or "").strip()
     e_alive = None
     if e_state:
-        e_alive = "ActiveState=active" in e_state or e_state.split()[0] == "active"
+        e_alive = e_state.split()[0] == "active"    # 첫 줄은 `systemctl is-active tg-canary`의 출력이다
     e_killed = ("E" in killed_roles) or (e_alive is False)
 
     # E 응답: T0부터 해소(또는 창 끝)까지. T0가 없으면 부하 시작부터 마지막 관찰까지.
@@ -398,14 +414,19 @@ def evaluate(d, now_ns=None, final=False):
             psi_disagree = False
 
     # 선행 여부: 해소가 데몬의 종료 때문인지 커널 때문인지 (기록용)
+    def before_kernel(t):
+        """t가 커널 OOM보다 앞서는가. 커널 OOM의 관찰 간격 안이면 선후를 알 수 없어 None."""
+        if t_oom is None or t < t_oom_prev:
+            return True
+        return False if t > t_oom else None
+
     first_actor = "none"
-    if t_kill is not None and (t_oom is None or t_kill < t_oom):
-        first_actor = "daemon"
+    if t_kill is not None:
+        b = before_kernel(t_kill)
+        first_actor = "daemon" if b else ("kernel" if b is False else "ambiguous")
     elif t_oom is not None:
         first_actor = "kernel"
-    daemon_before_kernel = None
-    if t_detect is not None:
-        daemon_before_kernel = t_oom is None or t_detect < t_oom
+    daemon_before_kernel = before_kernel(t_detect) if t_detect is not None else None
 
     return {
         "status": status,

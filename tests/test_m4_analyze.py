@@ -147,6 +147,23 @@ class TestSshOnsetAndResolve(Base):
         self.assertAlmostEqual(r["t0_s"], 80.0, delta=0.1)
         self.assertAlmostEqual(r["resolve_time_s"], 34.2, delta=0.1)
 
+    def test_resolution_waits_for_pending_probes_while_running(self):
+        # 70초부터 5번 연속 성공(마지막 시작 74초). 아직 끝나지 않은 프로브가 실패로 끝날 수 있으므로
+        # 제한 시간(5초)이 지나기 전에는 해소로 확정하지 않는다.
+        write_run(self.d)
+        write_ssh(self.d, [(40, 70)])
+        self.assertEqual(m4.evaluate(self.d, now_ns=BASE + 77 * NS)["status"], "running")
+        self.assertEqual(m4.evaluate(self.d, now_ns=BASE + 80 * NS)["status"], "resolved")
+
+    def test_no_thrash_needs_ssh_coverage(self):
+        # SSH 기록이 없거나 관찰 구간 앞에서 끊겼으면 접속 불가를 못 본 것이지 스래싱이 없었던 것이 아니다.
+        write_run(self.d, observe_sec=120)
+        r = m4.evaluate(self.d, now_ns=LOAD_START + 130 * NS)
+        self.assertEqual(r["status"], "running")
+        self.assertEqual(m4.evaluate(self.d, now_ns=LOAD_START + 130 * NS, final=True)["status"], "incomplete")
+        write_ssh(self.d, [], secs=60)   # 실행 시작 60초에서 끊김(관찰 구간 끝은 140초)
+        self.assertEqual(m4.evaluate(self.d, now_ns=LOAD_START + 130 * NS, final=True)["status"], "incomplete")
+
     def test_observe_window_for_no_thrash(self):
         write_run(self.d, observe_sec=120)
         write_ssh(self.d, [])
@@ -284,6 +301,19 @@ class TestDaemonLog(Base):
         self.assertFalse(r["daemon_decision_before_kernel"])
 
 
+class TestFirstActorUncertainty(Base):
+    def test_daemon_kill_inside_oom_observation_gap_is_ambiguous(self):
+        # 커널 OOM 카운터는 45초 샘플에서 처음 보인다. 직전 샘플은 44.75초이므로 그 사이(45.0초)의 데몬 종료와는 선후를 알 수 없다.
+        write_run(self.d)
+        write_ssh(self.d, [(40, 70)])
+        write_samples(self.d, [(40, 70, 0.5)], oom_at=45)
+        with open(os.path.join(self.d, "daemon.log"), "w") as f:
+            f.write(f"{iso(BASE + 44_900_000_000)} warn judge kill cand=tg-load.service dry_run=0 result=0 path=memory\n")
+        r = m4.evaluate(self.d, final=True)
+        self.assertEqual(r["first_actor"], "ambiguous")
+        self.assertIsNone(r["daemon_decision_before_kernel"])
+
+
 class TestEProbe(Base):
     def test_gap_is_clipped_to_the_window(self):
         write_run(self.d)
@@ -300,6 +330,16 @@ class TestEProbe(Base):
         write_probes(self.d, "canary_probe.tsv", [(0, 30)])  # 스래싱 전에 응답이 없던 것은 세지 않는다
         r = m4.evaluate(self.d, final=True)
         self.assertLessEqual(r["e_canary"]["max_gap_s"], 1.5)
+
+    def test_e_state_first_line_decides(self):
+        # tg-canary가 inactive인데 같은 파일에 다른 서비스의 ActiveState=active가 섞여도 E는 살아 있지 않다.
+        write_run(self.d)
+        write_ssh(self.d, [(40, 70)])
+        with open(os.path.join(self.d, "e_state.txt"), "w") as f:
+            f.write("inactive\nId=tg-load.service\nActiveState=active\n")
+        r = m4.evaluate(self.d, final=True)
+        self.assertFalse(r["e_alive_at_end"])
+        self.assertTrue(r["e_killed"])
 
     def test_e_state_failed(self):
         write_run(self.d)

@@ -108,6 +108,11 @@ case "$LOAD" in
     normal_burst)   LOAD_ARGS="burst --size-mib $BURST_MIB --hold $BURST_HOLD --rest $BURST_REST" ;;
 esac
 
+# 수신기와 SSH 프로브는 기존 파일에 이어 쓰고 분석기는 디렉터리의 모든 파일을 읽는다. 이전 실행의 기록이 섞이지 않도록 쓰던 디렉터리는 쓰지 않는다.
+if [ -n "$(ls -A "$OUT" 2>/dev/null)" ]; then
+    echo "결과 디렉터리가 비어 있지 않다: $OUT (지우거나 --out을 바꾼다)" >&2
+    exit 2
+fi
 mkdir -p "$OUT"
 log "결과 디렉터리: $OUT"
 log "부하=$LOAD ($LOAD_ARGS), 데몬=$DAEMON, 디스크 처리량 ${VM_BPS} B/s"
@@ -295,11 +300,23 @@ done
 
 if [ "$reachable" = 1 ]; then
     log "VM 응답: 로그 수집"
-    vm_run 60 'sudo journalctl -u thrash-guard --no-pager -o cat 2>/dev/null' >"$OUT/daemon.log" || true
-    vm_run 60 'sudo dmesg | grep -a -i -E "out of memory|oom-kill|killed process" || true' >"$OUT/dmesg_oom.txt" || true
-    vm_run 60 'tail -n 30 /tmp/tg-load.out 2>/dev/null; true' >"$OUT/load.out" || true
-    vm_run 60 'echo "$(systemctl is-active tg-canary)"; systemctl show tg-canary tg-load -p Id -p ActiveState -p SubState -p Result' \
-        >"$OUT/e_state.txt" 2>&1 || true
+    # 수집 도중 연결이 끊기면 앞부분만 남는다. 임시 파일로 받아 성공했을 때만 확정하고, 실패하면 파일을 두지 않아
+    # 분석기가 "없음"으로 다루게 한다(없으면 데몬 로그와 E 상태를 가져오지 못한 실행으로 판정 불가가 된다).
+    fetch() {
+        local name="$1" cmd="$2"
+        if vm_run 60 "$cmd" >"$OUT/$name.tmp" 2>/dev/null; then
+            mv "$OUT/$name.tmp" "$OUT/$name"
+        else
+            rm -f "$OUT/$name.tmp"
+            echo "수집 실패: $name" >>"$OUT/fetch_failed.txt"
+        fi
+    }
+    fetch daemon.log 'sudo journalctl -u thrash-guard --no-pager -o cat 2>/dev/null'
+    fetch dmesg_oom.txt 'sudo dmesg | grep -a -i -E "out of memory|oom-kill|killed process" || true'
+    fetch load.out 'tail -n 30 /tmp/tg-load.out 2>/dev/null; true'
+    # E 상태 파일에는 tg-canary만 쓴다. tg-load의 상태가 섞이면 E가 종료돼도 active로 읽힌다.
+    fetch e_state.txt 'echo "$(systemctl is-active tg-canary)"; systemctl show tg-canary -p Id -p ActiveState -p SubState -p Result'
+    fetch load_state.txt 'systemctl show tg-load -p Id -p ActiveState -p SubState -p Result'
     CLOCK_OFFSET_END_NS="$(clock_offset_ns 2>/dev/null || echo "")"
     [ -z "$CLOCK_OFFSET_END_NS" ] || echo "{\"start_ns\": $CLOCK_OFFSET_START_NS, \"end_ns\": $CLOCK_OFFSET_END_NS}" >"$OUT/clock_offset.json"
 else

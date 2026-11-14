@@ -36,7 +36,7 @@ def fill(root, load, daemon, values, status=None, **over):
     """부하·조건의 실행을 여러 개 만든다. values의 None은 unresolved로 쓴다."""
     for i, v in enumerate(values, 1):
         if v is None:
-            make_run(root, f"{load}-{daemon}-{i}", load, daemon, status="unresolved", resolve=None, **over)
+            make_run(root, f"{load}-{daemon}-{i}", load, daemon, status=status or "unresolved", resolve=None, **over)
         else:
             make_run(root, f"{load}-{daemon}-{i}", load, daemon, status=status or "resolved", resolve=v, **over)
 
@@ -62,9 +62,11 @@ class TestResolveJudgement(Base):
         fill(self.root, "spike_mem", "dry", [98.0, 100.0, 110.0])
         fill(self.root, "spike_mem", "kill", [45.0, 50.0, 55.0])
         fill(self.root, "normal_burst", "dry", [None, None, None], status="no_thrash")
-        _, _, _, j = self.judge()
+        runs, _, _, j = self.judge()
         self.assertEqual(j["resolve"]["runaway_growth"]["verdict"], "합격")
         self.assertEqual(j["resolve"]["spike_mem"]["verdict"], "합격")
+        # fill이 정상 버스트를 no_thrash로 만들었는지 확인한다(unresolved로 바뀌면 이 테스트가 무의미해진다)
+        self.assertEqual({r["result"]["status"] for r in runs if r["load"] == "normal_burst"}, {"no_thrash"})
 
     def test_kill_not_faster_than_dry_fails(self):
         fill(self.root, "spike_mem", "dry", [90.0, 95.0, 99.0])
@@ -92,13 +94,13 @@ class TestResolveJudgement(Base):
         self.assertEqual(j["verdict"], "불합격")
         self.assertEqual(j["kill_median"], math.inf)
 
-    def test_one_unresolved_kill_does_not_decide_the_median(self):
+    def test_one_unresolved_kill_fails_even_if_median_is_fine(self):
         fill(self.root, "spike_mem", "dry", [None, None, None])
         fill(self.root, "spike_mem", "kill", [30.0, 40.0, None])
         j = self.judge()[3]["resolve"]["spike_mem"]
-        self.assertEqual(j["verdict"], "합격")           # 중앙값은 40초
-        self.assertEqual(j["kill_worst"], math.inf)     # 최악은 별도로 드러난다
-        self.assertIn("켜짐 최악 미해소", j["reason"])
+        self.assertEqual(j["verdict"], "불합격")         # 중앙값은 40초지만 종료해도 풀리지 않은 실행이 있다
+        self.assertEqual(j["kill_worst"], math.inf)
+        self.assertIn("켜짐 1회가 T0 후 300초 안에 해소되지 않았다", j["reason"])
 
     def test_too_few_valid_runs_is_not_judged(self):
         # dry-run 3회 중 2회가 스래싱이 안 나면(no_thrash) 유효 실행이 1개뿐이다.
